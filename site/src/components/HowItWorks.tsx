@@ -1,7 +1,8 @@
 const steps = [
-  { num: '01', title: 'Create Your Wallet', desc: 'Generate a BIP39 mnemonic. Your Ed25519 keypair is your identity — no email, no password, no server.' },
-  { num: '02', title: 'Join the Community', desc: 'Register on-chain with a single transaction. Post threads, vote, moderate — all signed by you.' },
-  { num: '03', title: 'Exchange Value', desc: 'Tip creators, subscribe to content, trade services through multi-sig escrow. The smart contract handles everything.' },
+  { num: '01', title: 'Browse as Guest', desc: 'Explore the forum without creating a wallet. Read threads, browse categories, and see what the community is about — no signup required.' },
+  { num: '02', title: 'Create Your Wallet', desc: 'When you are ready, generate a wallet with a single click. A secure mnemonic is created and encrypted with your password. No email, no server accounts.' },
+  { num: '03', title: 'Join the Community', desc: 'Register on-chain with a single transaction. Post threads, react with emoji, follow other users, vote on polls, and send encrypted DMs — all signed by you.' },
+  { num: '04', title: 'Exchange Value', desc: 'Tip creators, subscribe to content, trade services through multi-sig escrow, and participate in governance proposals. The smart contract handles everything.' },
 ];
 
 export default function HowItWorks() {

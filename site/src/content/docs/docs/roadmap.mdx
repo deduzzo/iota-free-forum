@@ -1,0 +1,79 @@
+---
+title: Roadmap
+description: What has been built and what comes next for IotaPolis.
+---
+
+## Completed
+
+### Core Platform
+- On-chain forum with threads, posts, votes, categories, and moderation
+- Ed25519 wallet identity with BIP39 mnemonic (password-encrypted)
+- Smart contract with 6 parallel shared objects (Forum, UserRegistry, Treasury, SubscriptionStore, MarketplaceStore, GovernanceStore)
+- 4-level role system enforced on-chain (Banned/User/Moderator/Admin)
+- Rich WYSIWYG editor with markdown output
+- 7 themes, 8 languages
+- Guest mode for read-only access without wallet
+
+### Social Features
+- Real-time notifications (mentions, replies, tips, follows, escrow, DMs)
+- End-to-end encrypted direct messages (X25519 + AES-256-GCM)
+- Emoji reactions on posts (24 emoji with animations)
+- Follow/Unfollow system with on-chain counters
+
+### Economy
+- Tips, subscriptions, paid content, purchasable badges
+- Multi-sig 2-of-3 escrow with dispute resolution and expiry claims
+- On-chain reputation system with anti-double-rating
+- Marketplace with 5% fee, escrow with 2% fee to treasury
+
+### Governance
+- On-chain polls with multiple options and deadline
+- Governance proposals with quorum and yes/no voting
+
+### Performance
+- Code splitting (React.lazy, 16+ routes, 4 vendor chunks)
+- PWA with service worker and Workbox caching
+- Batch SQLite sync (10-50x faster)
+- In-memory cache with TTL
+- Persistent polling cursor
+
+### Security
+- Ed25519 auth on admin endpoints with timestamp verification
+- Rate limiting on all API endpoints
+- FTS5 standard search (migrated from contentless)
+
+### Admin Tools
+- Audit Dashboard: transaction explorer, real-time charts, CSV export
+- Agent Beta Testers: AI agents for stress testing
+- RSS feeds (latest posts, per-category)
+
+### Infrastructure
+- Desktop app (Electron) for Windows, macOS, Linux with auto-update
+- Mobile app support via Capacitor (iOS/Android)
+- 153 tests (25 Move, 83 backend, 45 frontend)
+- TypeScript incremental setup with JSDoc on critical files
+
+---
+
+## Future Roadmap
+
+### Mobile App Store Release
+Native iOS and Android app published to the App Store and Google Play via Capacitor builds. Push notifications, biometric unlock, and camera integration for image uploads.
+
+### IOTA 2.0 Mainnet Deployment
+Deploy the smart contract to IOTA 2.0 mainnet when it goes live. Includes migration tooling for testnet data, gas fee estimation per action type, and sponsored transaction support.
+
+### Plugin / Extension System
+Allow developers to create plugins that extend forum functionality: custom post types, integrations with external services, theme plugins, and automated moderation rules.
+
+### AI Content Moderation
+Multi-language content moderation powered by AI. Automatic detection of spam, toxic content, and policy violations with configurable sensitivity and moderator review queue.
+
+### Cross-Forum Federation
+Connect multiple IotaPolis instances into a federated network. Users can interact across forums with their single wallet identity, cross-forum search, and shared reputation.
+
+### Creator Analytics
+Advanced analytics dashboard for content creators: post performance, tip trends, subscriber growth, audience demographics, and content recommendations.
+
+### NFT Integration
+Tokenized avatars and badges as NFTs on IOTA. Users can mint, trade, and display NFT collectibles. Badge achievements as transferable on-chain assets.

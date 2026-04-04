@@ -43,12 +43,24 @@ export default defineConfig({
             { label: 'Payments & Tips', slug: 'docs/guides/payments' },
             { label: 'Escrow', slug: 'docs/guides/escrow' },
             { label: 'Marketplace', slug: 'docs/guides/marketplace' },
+            { label: 'Social Features', slug: 'docs/guides/social' },
+            { label: 'Notifications', slug: 'docs/guides/notifications' },
+            { label: 'Encrypted Messaging', slug: 'docs/guides/messaging' },
+            { label: 'Governance', slug: 'docs/guides/governance' },
+            { label: 'Agent Testers', slug: 'docs/guides/agents' },
+            { label: 'Audit Dashboard', slug: 'docs/guides/audit' },
           ],
         },
         {
           label: 'API Reference',
           items: [
             { label: 'REST Endpoints', slug: 'docs/api/endpoints' },
+          ],
+        },
+        {
+          label: 'Roadmap',
+          items: [
+            { label: 'Roadmap', slug: 'docs/roadmap' },
           ],
         },
       ],

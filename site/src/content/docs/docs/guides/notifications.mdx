@@ -1,0 +1,46 @@
+---
+title: Notifications
+description: Real-time in-app notifications for mentions, replies, tips, follows, and more.
+---
+
+IotaPolis includes a built-in notification system that keeps you informed about activity relevant to you.
+
+## Notification Types
+
+| Type | Trigger |
+|------|---------|
+| **Mention** | Someone @mentions you in a post |
+| **Reply** | Someone replies to your post or thread |
+| **Tip** | You receive a tip on one of your posts |
+| **Follow** | A user starts following you |
+| **Escrow** | Activity on an escrow you are involved in (delivery, dispute, resolution) |
+| **DM** | You receive a new direct message |
+| **Governance** | A proposal you voted on reaches a result |
+
+## How It Works
+
+### NotificationBell Component
+
+The `NotificationBell` component appears in the top navigation bar:
+
+- Shows a **badge count** of unread notifications
+- Click to open a **dropdown** with recent notifications
+- Each notification links to the relevant content (post, thread, escrow, DM)
+- Mark individual notifications as read, or mark all as read
+
+### Real-Time Delivery
+
+Notifications are delivered in real-time through WebSocket:
+
+1. A blockchain event is detected by the backend (e.g., a tip on your post)
+2. The backend creates a notification record in SQLite
+3. A WebSocket message is broadcast to the target user
+4. The `NotificationBell` updates its count and dropdown instantly
+
+### Storage
+
+Notifications are stored in the backend's SQLite cache. Since they are derived from blockchain events, they can be reconstructed from on-chain data if the cache is rebuilt.
+
+## Configuration
+
+Notification preferences can be managed in the **Settings** page. You can enable or disable specific notification types.

@@ -1,0 +1,48 @@
+---
+title: Social Features
+description: Follow users, react to posts, and build your social graph on-chain.
+---
+
+IotaPolis includes social features that are fully recorded on the IOTA blockchain.
+
+## Follow / Unfollow
+
+Follow other users to stay updated on their activity.
+
+### How It Works
+
+- Click the **Follow** button on any user's profile or post
+- The action is recorded on-chain via a `FORUM_FOLLOW` event
+- The followed user receives a notification
+- Follower and following counts are displayed on user profiles
+- Unfollow at any time — recorded as a `FORUM_UNFOLLOW` event
+
+### On-Chain Storage
+
+Follow relationships are stored in the **UserRegistry** shared object. This means:
+- Follow data is verifiable and immutable
+- Any node can reconstruct the social graph from blockchain events
+- No central server controls who you follow
+
+## Emoji Reactions
+
+React to posts with emoji to express yourself quickly.
+
+### Available Reactions
+
+IotaPolis supports **24 emoji reactions** on every post, including common reactions like thumbs up, heart, laugh, thinking, fire, rocket, and more.
+
+### How It Works
+
+- Hover over a post to see the reaction bar
+- Click an emoji to react — click again to toggle off
+- Reactions appear with smooth animations below the post
+- Each reaction shows a count and the list of users who reacted
+- Reactions are recorded on-chain as `FORUM_REACTION` events
+
+### On-Chain Verification
+
+Since reactions are blockchain events:
+- They cannot be faked or manipulated
+- Reaction counts are verifiable by any node
+- The complete reaction history is preserved

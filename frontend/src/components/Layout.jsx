@@ -1,18 +1,21 @@
 import { useState, useCallback, useEffect, createContext, useContext } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Home, BarChart3, Fingerprint, ShieldCheck, Users,
   Search, Wifi, WifiOff, Menu, Settings, Globe, Wallet,
   Loader2, AlertTriangle, Fuel, Store, Shield, Crown,
+  LayoutGrid, User, Bell, MessageSquare, Activity, Vote,
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import IdentityBadge from './IdentityBadge';
 import OnboardingGuard from './OnboardingGuard';
 import UnlockGuard from './UnlockGuard';
+import GuestBanner from './GuestBanner';
 import Toast from './Toast';
 import TransactionTracker from './TransactionTracker';
 import UpdateNotifier from './UpdateNotifier';
+import NotificationBell from './NotificationBell';
 import { useTheme } from '../hooks/useTheme';
 import { useIdentity } from '../hooks/useIdentity';
 import { useApi } from '../hooks/useApi';
@@ -40,6 +43,9 @@ function getNavItems(isAdmin, t) {
     { to: '/users', icon: Users, label: t('nav.users', 'Utenti'), group: 'Forum' },
     { to: '/dashboard', icon: BarChart3, label: t('nav.dashboard'), group: 'Forum' },
     { to: '/marketplace', icon: Store, label: t('nav.marketplace'), group: 'Forum' },
+    { to: '/governance', icon: Vote, label: t('nav.governance', 'Governance'), group: 'Forum' },
+    { to: '/notifications', icon: Bell, label: t('notifications.title'), group: 'Account' },
+    { to: '/messages', icon: MessageSquare, label: t('dm.inbox', 'Messages'), group: 'Account' },
     { to: '/wallet', icon: Wallet, label: t('nav.wallet'), group: 'Account' },
     { to: '/escrow', icon: Shield, label: t('nav.escrow'), group: 'Account' },
     { to: '/subscription', icon: Crown, label: t('nav.subscription'), group: 'Account' },
@@ -47,12 +53,66 @@ function getNavItems(isAdmin, t) {
   ];
   if (isAdmin) {
     items.push({ to: '/admin', icon: ShieldCheck, label: t('nav.admin'), group: 'Account' });
+    items.push({ to: '/admin/audit', icon: Activity, label: t('nav.audit', 'Audit'), group: 'Account' });
   }
   items.push(
     { to: '/settings', icon: Settings, label: t('nav.settings'), group: 'Account' },
     { to: '/setup', icon: Globe, label: t('nav.setup'), group: 'Account' },
   );
   return items;
+}
+
+/* ── Mobile bottom nav ────────────────────────────────────────── */
+
+function MobileBottomNav({ navigate }) {
+  const { t } = useTranslation();
+  const { pathname: location } = useLocation();
+
+  const items = [
+    { to: '/', icon: Home, label: t('nav.home') },
+    { to: '/users', icon: LayoutGrid, label: t('nav.categories', 'Explore') },
+    { to: '/wallet', icon: Wallet, label: t('nav.wallet') },
+    { to: '/identity', icon: User, label: t('nav.identity') },
+  ];
+
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t flex items-center justify-around px-2 py-1.5"
+      style={{
+        background: 'rgba(10, 10, 26, 0.75)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        borderColor: 'rgba(255,255,255,0.08)',
+      }}
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        const isActive = location === item.to;
+        return (
+          <button
+            key={item.to}
+            onClick={() => navigate(item.to)}
+            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[56px]"
+            style={{
+              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              background: isActive ? 'rgba(0, 240, 255, 0.08)' : 'transparent',
+            }}
+          >
+            <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+            <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="mobile-nav-indicator"
+                className="absolute -top-px left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full"
+                style={{ background: 'var(--color-primary)', boxShadow: '0 0 8px var(--color-primary)' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 /* ── Layout ────────────────────────────────────────────────────── */
@@ -365,8 +425,8 @@ export default function Layout() {
 
         {/* Main area */}
         <div
-          className="flex-1 flex flex-col min-h-screen transition-[margin] duration-300"
-          style={{ marginLeft: collapsed ? 72 : 260 }}
+          className="flex-1 flex flex-col min-h-screen transition-[margin] duration-300 ml-0 md:ml-[var(--sidebar-w)]"
+          style={{ '--sidebar-w': collapsed ? '72px' : '260px' }}
         >
           {/* Top bar */}
           <header
@@ -440,6 +500,9 @@ export default function Layout() {
                 />
               )}
 
+              {/* Notification bell */}
+              {identity && <NotificationBell />}
+
               {/* Identity badge + role */}
               {identity && (
                 <div className="flex items-center gap-2">
@@ -473,14 +536,19 @@ export default function Layout() {
           </header>
 
           {/* Page content */}
-          <main className="flex-1 p-4 md:p-6">
+          <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">
             <OnboardingGuard>
               <UnlockGuard>
                 <Outlet />
               </UnlockGuard>
             </OnboardingGuard>
+            {/* Guest banner — show only if user has no wallet and identity check is done */}
+            {!identity && <GuestBanner identityChecked={true} />}
           </main>
         </div>
+
+        {/* Mobile bottom nav bar */}
+        <MobileBottomNav navigate={navigate} />
 
         {/* Toasts */}
         <Toast toasts={toasts} onDismiss={dismissToast} />

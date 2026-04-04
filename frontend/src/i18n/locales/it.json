@@ -10,7 +10,9 @@
     "wallet": "Wallet",
     "marketplace": "Marketplace",
     "escrow": "Escrow",
-    "subscription": "Abbonamento"
+    "subscription": "Abbonamento",
+    "audit": "Audit",
+    "governance": "Governance"
   },
   "home": {
     "categories": "Categorie",
@@ -161,7 +163,7 @@
   "identity": {
     "title": "Identità",
     "generateTitle": "Crea il tuo Wallet",
-    "generateDesc": "La tua identità è un wallet IOTA Ed25519 memorizzato nel tuo browser, protetto da password. Le 12 parole di recupero ti permettono di ripristinarlo ovunque.",
+    "generateDesc": "La tua identita e un wallet IOTA memorizzato nel tuo browser, protetto da password. Le 12 parole di recupero ti permettono di ripristinarlo ovunque.",
     "generating": "Generazione...",
     "generateWallet": "Genera Wallet",
     "passwordLabel": "Scegli una password per proteggere il wallet",
@@ -203,7 +205,14 @@
     "confirmIrreversible": "Clicca di nuovo per confermare — questa azione è irreversibile!",
     "currentWillBeLost": "Il tuo wallet attuale sarà perso permanentemente se non hai la frase di recupero",
     "activity": "Attività",
-    "reputation": "Reputazione"
+    "reputation": "Reputazione",
+    "walletRequired": "Per accedere a questa sezione devi avere un wallet. Creane uno qui sotto per iniziare.",
+    "rememberMe": "Ricordami su questo dispositivo",
+    "passwordStrength": {
+      "weak": "Debole",
+      "medium": "Media",
+      "strong": "Forte"
+    }
   },
   "admin": {
     "title": "Pannello Admin",
@@ -410,6 +419,8 @@
     "ratingComment": "Lascia un commento (opzionale)...",
     "submitRating": "Invia Valutazione",
     "submitting": "Invio...",
+    "claimExpired": "Reclama Fondi Scaduti",
+    "claimExpiredConfirm": "La scadenza dell'escrow è passata. Reclamare il rimborso?",
     "status": {
       "created": "Creato",
       "funded": "Finanziato",
@@ -515,5 +526,192 @@
     "renew": "Rinnova",
     "processing": "Elaborazione...",
     "billingHistory": "Storico Pagamenti"
+  },
+  "guest": {
+    "banner": {
+      "title": "Vuoi partecipare? Crea il tuo wallet in 2 minuti",
+      "cta": "Crea Wallet"
+    }
+  },
+  "notifications": {
+    "title": "Notifiche",
+    "markAllRead": "Segna tutte come lette",
+    "loading": "Caricamento...",
+    "empty": "Nessuna notifica",
+    "emptyDesc": "Riceverai notifiche quando qualcuno risponde, ti menziona o invia un tip.",
+    "viewAll": "Vedi tutte le notifiche",
+    "filter": {
+      "all": "Tutte",
+      "replies": "Risposte",
+      "mentions": "Menzioni",
+      "tips": "Tip",
+      "escrow": "Escrow"
+    },
+    "type": {
+      "reply": "Risposta",
+      "mention": "Menzione",
+      "tip": "Tip",
+      "escrow": "Escrow",
+      "dm": "Messaggio",
+      "follow": "Segui"
+    }
+  },
+  "reactions": {
+    "addReaction": "Aggiungi reazione"
+  },
+  "dm": {
+    "inbox": "Messaggi",
+    "newMessage": "Nuovo Messaggio",
+    "send": "Messaggio",
+    "encrypted": "Crittografia End-to-End",
+    "encryptedMessage": "Messaggio crittografato",
+    "noConversations": "Nessuna conversazione",
+    "placeholder": "Scrivi un messaggio crittografato...",
+    "searchConversations": "Cerca conversazioni...",
+    "selectConversation": "Seleziona una conversazione",
+    "selectConversationDesc": "Scegli una conversazione dalla lista o iniziane una nuova.",
+    "noMessages": "Nessun messaggio. Invia il primo!",
+    "cannotDecrypt": "Impossibile decifrare",
+    "loading": "Caricamento...",
+    "loginRequired": "Accedi per usare i messaggi",
+    "loginRequiredDesc": "Crea o sblocca il tuo wallet per inviare messaggi crittografati.",
+    "noPublicKey": "Questo utente non ha ancora condiviso la sua chiave pubblica. Deve prima registrarsi sul forum."
+  },
+  "audit": {
+    "title": "Dashboard Audit",
+    "subtitle": "Monitoraggio transazioni in tempo reale e analisi",
+    "accessDenied": "Accesso Negato",
+    "loginRequired": "Autenticazione admin richiesta per accedere alla dashboard audit.",
+    "refresh": "Aggiorna",
+    "noTransactions": "Nessuna transazione trovata",
+    "export": "Esporta CSV",
+    "topUsers": "Top 10 Utenti per TX",
+    "stats": {
+      "totalTx": "TX Totali",
+      "tx24h": "TX Oggi",
+      "activeUsers": "Utenti Attivi",
+      "paymentVolume": "Volume Pagamenti",
+      "dmEncrypted": "Crittografati (DM)",
+      "avgPerHour": "TX/Ora Media"
+    },
+    "chart": {
+      "title": "Transazioni (Ultime 24h)"
+    },
+    "filters": {
+      "title": "Filtri",
+      "allTypes": "Tutti i Tipi",
+      "user": "Indirizzo utente..."
+    },
+    "table": {
+      "timestamp": "Data/Ora",
+      "type": "Tipo",
+      "user": "Utente",
+      "action": "Azione",
+      "preview": "Anteprima",
+      "txDigest": "TX Digest"
+    },
+    "pagination": {
+      "showing": "Mostrando",
+      "of": "di"
+    }
+  },
+  "governance": {
+    "title": "Governance",
+    "subtitle": "Sondaggi e proposte della community on-chain",
+    "polls": "Sondaggi",
+    "proposals": "Proposte",
+    "createPoll": "Crea Sondaggio",
+    "createProposal": "Crea Proposta",
+    "noPolls": "Nessun sondaggio ancora. Crea il primo!",
+    "noProposals": "Nessuna proposta ancora. Invia la prima!",
+    "pollTitle": "Titolo",
+    "pollTitlePlaceholder": "Cosa vuoi chiedere?",
+    "description": "Descrizione",
+    "options": "Opzioni",
+    "option": "Opzione",
+    "addOption": "Aggiungi opzione",
+    "deadline": "Scadenza",
+    "hour": "ora",
+    "hours": "ore",
+    "day": "giorno",
+    "days": "giorni",
+    "quorum": "Quorum",
+    "proposalTitle": "Titolo",
+    "proposalTitlePlaceholder": "Titolo della proposta...",
+    "proposalDescPlaceholder": "Descrivi la proposta in dettaglio...",
+    "votes": "voti",
+    "youVoted": "Hai votato",
+    "closed": "Chiuso",
+    "voteYes": "Vota Si",
+    "voteNo": "Vota No",
+    "yes": "Si",
+    "no": "No",
+    "status": {
+      "active": "Attivo",
+      "passed": "Approvata",
+      "rejected": "Respinta",
+      "expired": "Scaduta"
+    }
+  },
+  "social": {
+    "follow": "Segui",
+    "following": "Seguito",
+    "followers": "Follower",
+    "unfollow": "Non seguire"
+  },
+  "agents": {
+    "title": "Agent Beta Tester",
+    "unlockRequired": "Sblocca il wallet per accedere agli Agent Tester",
+    "configuration": "Configurazione",
+    "count": "Agenti",
+    "duration": "Durata",
+    "frequency": "Frequenza",
+    "start": "Avvia Agenti",
+    "stop": "Ferma",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "noActivity": "Nessuna attivita ancora",
+    "noFeedback": "Nessun feedback ancora",
+    "personality": {
+      "label": "Personalita",
+      "random": "Casuale",
+      "balanced": "Bilanciato",
+      "explorer": "Esploratore",
+      "lurker": "Osservatore",
+      "trader": "Trader",
+      "troll": "Troll",
+      "normal": "Normale"
+    },
+    "modules": {
+      "label": "Moduli",
+      "forum": "Forum",
+      "payments": "Pagamenti",
+      "escrow": "Escrow",
+      "social": "Social",
+      "edgecases": "Casi Limite"
+    },
+    "status": {
+      "running": "IN ESECUZIONE",
+      "paused": "IN PAUSA",
+      "stopped": "FERMATO",
+      "totalActions": "Azioni Totali",
+      "errors": "Errori",
+      "errorsShort": "errori",
+      "actions": "azioni",
+      "activeAgents": "Agenti Attivi",
+      "feedbackItems": "Feedback",
+      "actionsPerInterval": "Azioni / 10s",
+      "remaining": "rimanenti"
+    },
+    "tabs": {
+      "agents": "Agenti",
+      "activity": "Feed Attivita",
+      "feedback": "Feedback"
+    },
+    "feedback": {
+      "error": "Errore",
+      "bug": "Bug",
+      "suggestion": "Suggerimento"
+    }
   }
 }

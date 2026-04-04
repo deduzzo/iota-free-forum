@@ -10,6 +10,7 @@ description: High-level architecture of IotaPolis.
 |       Frontend           |
 |  React 19 + Vite + TW4  |
 |  Ed25519 wallet in-app   |
+|  PWA + Capacitor mobile  |
 +-----------+--------------+
             |
             | REST API (read-only)
@@ -18,7 +19,8 @@ description: High-level architecture of IotaPolis.
 +-----------+--------------+
 |    Backend (Indexer)     |
 |    Sails.js + SQLite     |
-|    Cache & search only   |
+|    Cache, search, RSS    |
+|    Rate limiting         |
 +-----------+--------------+
             |
             | Subscribe events
@@ -27,9 +29,27 @@ description: High-level architecture of IotaPolis.
 +-----------+--------------+
 |    IOTA 2.0 Blockchain   |
 |    Move Smart Contract   |
+|    6 Shared Objects      |
 |    Validators verify TX  |
 +--------------------------+
 ```
+
+## Smart Contract: 6 Shared Objects
+
+The Move smart contract has been refactored from a single monolithic `Forum` object into **6 parallel shared objects**. This allows IOTA validators to process transactions on different objects concurrently, eliminating contention:
+
+| Object | Purpose |
+|--------|---------|
+| **Forum** | Forum data, categories, global configuration |
+| **UserRegistry** | User profiles, roles, follow relationships |
+| **Treasury** | Fund management, fee collection, withdrawals |
+| **SubscriptionStore** | Subscription tiers and user subscription status |
+| **MarketplaceStore** | Paid content listings, purchasable badges |
+| **GovernanceStore** | Polls with options/votes, governance proposals with quorum |
+
+Additionally:
+- **AdminCap** (owned): deployer capability for admin operations
+- **Escrow** (shared, per-trade): individual 2-of-3 multi-sig escrow instances
 
 ## Security Model
 
@@ -40,27 +60,52 @@ IotaPolis follows a **direct-signing** architecture:
 - **The server is an indexer only.** It never holds user private keys and never signs transactions on behalf of users.
 - **On-chain verification.** IOTA validators verify `ctx.sender()` at the protocol level, making impersonation impossible.
 - **Backend trusts `eventAuthor`.** When indexing events, `ForumManager` uses the `eventAuthor` field from the blockchain event (verified on-chain), not any author ID from the payload.
+- **E2E encrypted DMs.** Direct messages use X25519 key exchange + AES-256-GCM. The server relays ciphertext but cannot read message contents.
+- **Guest mode.** Users can browse and read the forum without creating a wallet.
+- **Rate limiting.** All API endpoints are rate-limited (100 req/min global, 1 req/min for heavy operations).
+- **Admin auth.** Admin endpoints (full-reset, sync-reset) require Ed25519 signature verification with timestamp.
 
 ## Data Flow
 
-1. User composes an action in the frontend (post, vote, tip, etc.)
+1. User composes an action in the frontend (post, vote, tip, react, follow, etc.)
 2. The frontend serializes the data as JSON, gzips it, and builds a Move transaction
 3. The user's Ed25519 key signs the transaction
 4. The signed transaction is submitted to IOTA validators
-5. Validators verify the signature and execute the Move function
+5. Validators verify the signature and execute the Move function on the appropriate shared object
 6. The smart contract emits an event (e.g. `ForumEvent`, `TipEvent`)
-7. The backend indexes the event into SQLite
-8. The frontend displays the updated data
+7. The backend indexes the event into SQLite (batch sync with transactions for performance)
+8. The backend broadcasts `dataChanged` via WebSocket
+9. All connected clients update their UI in real-time
 
 ## Real-Time Sync
 
-IotaPolis uses four complementary sync mechanisms:
+IotaPolis uses five complementary sync mechanisms:
 
 | Mechanism | Latency | Description |
 |-----------|---------|-------------|
 | **WebSocket** | Instant | Same-server broadcast of `dataChanged` with entity and action |
 | **IOTA subscribeEvent** | ~2 seconds | Native blockchain event subscription |
-| **Blockchain polling** | 30 seconds | `pollNewEvents()` via incremental cursor |
-| **Auto-repair** | 60 seconds | `repairSync()` compares cache vs. blockchain |
+| **Blockchain polling** | 30 seconds | `pollNewEvents()` via persistent incremental cursor |
+| **Auto-repair** | 60 seconds | Incremental `repairSync()` compares cache vs. blockchain |
+| **Batch sync** | On startup | SQLite transactions group inserts for 10-50x faster initial sync |
 
 If the WebSocket or subscription fails, polling and auto-repair ensure the cache stays consistent.
+
+## Performance Optimizations
+
+- **Code splitting**: React.lazy on 16+ routes with vendor chunk splitting (4 bundles)
+- **PWA**: Service worker with Workbox caching for offline support
+- **In-memory cache**: TTL-based cache for frequently accessed queries
+- **Aggregate SQL**: Pre-computed statistics via SQL aggregates
+- **Batch sync**: SQLite transactions for bulk inserts during initial sync
+- **Persistent cursor**: Polling resumes from last known position across restarts
+
+## Connection String
+
+Forums are identified by an 8-segment connection string:
+
+```
+network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId:governanceStoreId
+```
+
+Share this string so anyone can connect their node to your forum.

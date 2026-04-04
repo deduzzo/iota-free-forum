@@ -1,0 +1,50 @@
+---
+title: Encrypted Messaging
+description: End-to-end encrypted direct messages using X25519 key exchange and AES-256-GCM.
+---
+
+IotaPolis supports private direct messaging (DM) between users. All messages are **end-to-end encrypted** — the server relays ciphertext but cannot read your conversations.
+
+## How E2E Encryption Works
+
+### Key Exchange
+
+IotaPolis uses **X25519 Diffie-Hellman** key exchange to establish shared secrets between users:
+
+1. Each user's Ed25519 signing key is converted to an X25519 key pair
+2. When user A wants to message user B, the frontend computes a shared secret using A's X25519 private key and B's X25519 public key
+3. Both sides derive the same shared secret independently (Diffie-Hellman property)
+4. The shared secret is used to derive an AES-256-GCM encryption key
+
+### Message Encryption
+
+Each message is encrypted with **AES-256-GCM**:
+
+- A unique initialization vector (IV) is generated per message
+- The message plaintext is encrypted with the shared AES key
+- The ciphertext + IV are stored on-chain via a `FORUM_DM` event
+- Only the sender and recipient can decrypt the message
+
+### What the Server Sees
+
+The backend indexes DM events but only stores:
+- Sender address
+- Recipient address
+- Encrypted ciphertext
+- Timestamp
+
+The server **cannot** read message contents. Even if the database is compromised, messages remain encrypted.
+
+## Sending a Message
+
+1. Navigate to a user's profile and click **Send Message**, or go to the **Messages** page
+2. Type your message in the composer
+3. Click Send — the frontend encrypts the message and submits it as a blockchain transaction
+4. The recipient sees the message in their Messages page and receives a notification
+
+## Security Considerations
+
+- **Forward secrecy**: Each conversation uses a derived key from the X25519 exchange. Compromising one key does not expose other conversations.
+- **No server trust**: The server never sees plaintext. Key exchange happens entirely in the browser.
+- **On-chain persistence**: Encrypted messages are stored as blockchain events, making them censorship-resistant and auditable (but unreadable without keys).
+- **Key backup**: Your messaging keys are derived from your wallet mnemonic. Backing up your 12-word mnemonic backs up your messaging capability.

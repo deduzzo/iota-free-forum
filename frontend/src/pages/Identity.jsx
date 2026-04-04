@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Key, User, Download, Upload, Shield, Copy, RefreshCw,
@@ -9,6 +10,40 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useIdentity } from '../hooks/useIdentity';
 import { useWallet, formatIota } from '../hooks/useWallet';
+
+// ─── Password strength indicator ──────────────────────────────────────────────
+function PasswordStrength({ password, t }) {
+  if (!password) return null;
+
+  let level, color, label;
+  if (password.length < 6) {
+    level = 1; color = 'var(--color-danger)'; label = t('identity.passwordStrength.weak', 'Weak');
+  } else if (password.length < 10) {
+    level = 2; color = 'var(--color-warning)'; label = t('identity.passwordStrength.medium', 'Medium');
+  } else {
+    level = 3; color = 'var(--color-success)'; label = t('identity.passwordStrength.strong', 'Strong');
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1.5">
+      <div className="flex-1 flex gap-1">
+        {[1, 2, 3].map(i => (
+          <motion.div
+            key={i}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            className="h-1 rounded-full flex-1"
+            style={{
+              backgroundColor: i <= level ? color : 'var(--color-border)',
+              transformOrigin: 'left',
+            }}
+          />
+        ))}
+      </div>
+      <span className="text-xs font-medium" style={{ color }}>{label}</span>
+    </div>
+  );
+}
 
 const fadeSlide = {
   initial: { opacity: 0, y: 20 },
@@ -45,6 +80,10 @@ export default function Identity() {
   else if (identity && unlocked && !identity.username) state = 'no-username';
   else if (identity && unlocked && identity.username) state = 'registered';
 
+  // Show message if redirected from a protected route
+  const location = useLocation();
+  const fromProtected = location.state?.fromProtected;
+
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
       <motion.h1
@@ -56,6 +95,24 @@ export default function Identity() {
         <Shield size={28} className="text-[var(--color-primary)]" />
         {t('identity.title')}
       </motion.h1>
+
+      {/* Message for guests redirected from protected routes */}
+      {fromProtected && !identity && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 rounded-xl border flex items-center gap-3"
+          style={{
+            borderColor: 'var(--color-warning)',
+            backgroundColor: 'rgba(255,170,0,0.08)',
+          }}
+        >
+          <AlertTriangle size={20} style={{ color: 'var(--color-warning)' }} />
+          <p className="text-sm" style={{ color: 'var(--color-warning)' }}>
+            {t('identity.walletRequired', 'You need a wallet to access that page. Create one below to get started.')}
+          </p>
+        </motion.div>
+      )}
 
       <AnimatePresence mode="wait">
         {state === 'none' && (
@@ -257,6 +314,8 @@ function NoIdentityCard({ onGenerate, onConfirmMnemonic, onImport }) {
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
+
+        <PasswordStrength password={password} t={t} />
 
         <div className="relative">
           <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />

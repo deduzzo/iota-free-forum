@@ -11,7 +11,8 @@
  *   - Wallet must have gas (faucet funds on testnet)
  *
  * Outputs:
- *   - Saves FORUM_PACKAGE_ID, FORUM_OBJECT_ID, ADMIN_CAP_ID to config/private_iota_conf.js
+ *   - Saves FORUM_PACKAGE_ID, FORUM_OBJECT_ID, FORUM_REGISTRY_ID, FORUM_TREASURY_ID,
+ *     FORUM_SUBSCRIPTION_STORE_ID, FORUM_MARKETPLACE_STORE_ID, ADMIN_CAP_ID to config/private_iota_conf.js
  *   - Prints the connection string for sharing
  */
 
@@ -135,9 +136,14 @@ async function main() {
 
   console.log(`[move-publish] TX digest: ${result.digest}`);
 
-  // 6. Extract IDs from object changes
+  // 6. Extract IDs from object changes — 5 shared objects + AdminCap
   let packageId = null;
   let forumObjectId = null;
+  let registryId = null;
+  let treasuryId = null;
+  let subscriptionStoreId = null;
+  let marketplaceStoreId = null;
+  let governanceStoreId = null;
   let adminCapId = null;
 
   for (const change of (result.objectChanges || [])) {
@@ -145,8 +151,23 @@ async function main() {
       packageId = change.packageId;
     }
     if (change.type === 'created') {
-      if (change.objectType?.includes('::forum::Forum')) {
+      if (change.objectType?.includes('::forum::Forum') && !change.objectType?.includes('::forum::ForumEvent')) {
         forumObjectId = change.objectId;
+      }
+      if (change.objectType?.includes('::forum::UserRegistry')) {
+        registryId = change.objectId;
+      }
+      if (change.objectType?.includes('::forum::Treasury')) {
+        treasuryId = change.objectId;
+      }
+      if (change.objectType?.includes('::forum::SubscriptionStore')) {
+        subscriptionStoreId = change.objectId;
+      }
+      if (change.objectType?.includes('::forum::MarketplaceStore')) {
+        marketplaceStoreId = change.objectId;
+      }
+      if (change.objectType?.includes('::forum::GovernanceStore')) {
+        governanceStoreId = change.objectId;
       }
       if (change.objectType?.includes('::forum::AdminCap')) {
         adminCapId = change.objectId;
@@ -154,25 +175,41 @@ async function main() {
     }
   }
 
-  if (!packageId || !forumObjectId || !adminCapId) {
+  if (!packageId || !forumObjectId || !registryId || !adminCapId) {
     console.error('[move-publish] ERROR: Could not extract all IDs from transaction');
     console.error('  packageId:', packageId);
     console.error('  forumObjectId:', forumObjectId);
+    console.error('  registryId:', registryId);
+    console.error('  treasuryId:', treasuryId);
+    console.error('  subscriptionStoreId:', subscriptionStoreId);
+    console.error('  marketplaceStoreId:', marketplaceStoreId);
+    console.error('  governanceStoreId:', governanceStoreId);
     console.error('  adminCapId:', adminCapId);
     console.error('  objectChanges:', JSON.stringify(result.objectChanges, null, 2));
     process.exit(1);
   }
 
-  console.log(`[move-publish] Package ID:    ${packageId}`);
-  console.log(`[move-publish] Forum Object:  ${forumObjectId}`);
-  console.log(`[move-publish] Admin Cap:     ${adminCapId}`);
+  console.log(`[move-publish] Package ID:          ${packageId}`);
+  console.log(`[move-publish] Forum Object:        ${forumObjectId}`);
+  console.log(`[move-publish] UserRegistry:        ${registryId}`);
+  console.log(`[move-publish] Treasury:            ${treasuryId}`);
+  console.log(`[move-publish] SubscriptionStore:   ${subscriptionStoreId}`);
+  console.log(`[move-publish] MarketplaceStore:    ${marketplaceStoreId}`);
+  console.log(`[move-publish] GovernanceStore:     ${governanceStoreId}`);
+  console.log(`[move-publish] Admin Cap:           ${adminCapId}`);
 
   // 7. Save to config
   _saveToConfig('FORUM_PACKAGE_ID', packageId);
   _saveToConfig('FORUM_OBJECT_ID', forumObjectId);
+  _saveToConfig('FORUM_REGISTRY_ID', registryId);
+  if (treasuryId) _saveToConfig('FORUM_TREASURY_ID', treasuryId);
+  if (subscriptionStoreId) _saveToConfig('FORUM_SUBSCRIPTION_STORE_ID', subscriptionStoreId);
+  if (marketplaceStoreId) _saveToConfig('FORUM_MARKETPLACE_STORE_ID', marketplaceStoreId);
+  if (governanceStoreId) _saveToConfig('FORUM_GOVERNANCE_STORE_ID', governanceStoreId);
   _saveToConfig('ADMIN_CAP_ID', adminCapId);
 
-  const connectionString = `${network}:${packageId}:${forumObjectId}`;
+  let connectionString = `${network}:${packageId}:${forumObjectId}:${registryId}:${treasuryId || ''}:${subscriptionStoreId || ''}:${marketplaceStoreId || ''}`;
+  if (governanceStoreId) connectionString += `:${governanceStoreId}`;
 
   console.log('\n══════════════════════════════════════════════════');
   console.log(' Move contract deployed successfully!');

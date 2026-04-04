@@ -10,8 +10,23 @@ config/private_arweave_conf.js
 move/forum/build/
 move/forum/Move.lock
 
+# Capacitor native platforms
+frontend/ios/
+frontend/android/
+
 # Electron build output
 desktop/dist/
 desktop/node_modules/
 desktop/dist/
 desktop/node_modules/
+
+# Auto Claude data directory
+.auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/

@@ -1,8 +1,9 @@
 /**
  * sync-connect.js — Connect to an existing forum by its Move contract IDs.
  *
- * Connection string format: network:packageId:forumObjectId
- * Legacy format (deprecated): network:address
+ * Connection string format (new): network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId
+ * Legacy format (3 parts): network:packageId:forumObjectId
+ * Deprecated format (2 parts): network:address
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +12,7 @@ const CONFIG_PATH = path.resolve(__dirname, '../../config/private_iota_conf.js')
 
 module.exports = {
   friendlyName: 'Sync Connect',
-  description: 'Connect to a remote forum by its Move contract Package ID and Forum Object ID.',
+  description: 'Connect to a remote forum by its Move contract Package ID and shared object IDs.',
 
   inputs: {
     connectionString: { type: 'string', required: true },
@@ -27,16 +28,22 @@ module.exports = {
     const parts = raw.split(':');
 
     // Parse connection string
-    let network, packageId, forumObjectId;
+    let network, packageId, forumObjectId, registryId, treasuryId, subscriptionStoreId, marketplaceStoreId, governanceStoreId;
 
-    if (parts.length === 3) {
-      // New format: network:packageId:forumObjectId
+    if (parts.length === 8) {
+      // New format with governance: network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId:governanceStoreId
+      [network, packageId, forumObjectId, registryId, treasuryId, subscriptionStoreId, marketplaceStoreId, governanceStoreId] = parts;
+    } else if (parts.length === 7) {
+      // Format without governance: network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId
+      [network, packageId, forumObjectId, registryId, treasuryId, subscriptionStoreId, marketplaceStoreId] = parts;
+    } else if (parts.length === 3) {
+      // Legacy format: network:packageId:forumObjectId (no separate shared objects)
       [network, packageId, forumObjectId] = parts;
     } else if (parts.length === 2) {
-      // Legacy format: network:address — no longer supported for Move mode
+      // Deprecated: network:address
       return {
         success: false,
-        error: 'Formato legacy non supportato. Usa il formato: network:packageId:forumObjectId',
+        error: 'Formato legacy non supportato. Usa il formato: network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId',
       };
     } else {
       throw 'badRequest';
@@ -112,6 +119,11 @@ module.exports = {
       // Save to config
       _saveToConfig('FORUM_PACKAGE_ID', packageId);
       _saveToConfig('FORUM_OBJECT_ID', forumObjectId);
+      if (registryId) _saveToConfig('FORUM_REGISTRY_ID', registryId);
+      if (treasuryId) _saveToConfig('FORUM_TREASURY_ID', treasuryId);
+      if (subscriptionStoreId) _saveToConfig('FORUM_SUBSCRIPTION_STORE_ID', subscriptionStoreId);
+      if (marketplaceStoreId) _saveToConfig('FORUM_MARKETPLACE_STORE_ID', marketplaceStoreId);
+      if (governanceStoreId) _saveToConfig('FORUM_GOVERNANCE_STORE_ID', governanceStoreId);
       // No ADMIN_CAP_ID — only the deployer has it
 
       // Reload config in iota.js
@@ -134,6 +146,11 @@ module.exports = {
         success: true,
         packageId,
         forumObjectId,
+        registryId: registryId || null,
+        treasuryId: treasuryId || null,
+        subscriptionStoreId: subscriptionStoreId || null,
+        marketplaceStoreId: marketplaceStoreId || null,
+        governanceStoreId: governanceStoreId || null,
         network,
         totalEvents,
         syncStats,

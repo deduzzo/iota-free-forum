@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '../hooks/useApi';
 import { useRealtimeUpdate } from '../hooks/useWebSocket';
 import { useIdentity } from '../hooks/useIdentity';
+import { useWallet } from '../hooks/useWallet';
 import EscrowCard from '../components/EscrowCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -32,6 +33,7 @@ const ROLE_FILTERS = ['all', 'buyer', 'seller', 'arbitrator'];
 export default function EscrowDashboard() {
   const { t } = useTranslation();
   const { identity, signAndSend } = useIdentity();
+  const { claimExpiredEscrow } = useWallet();
   const [activeTab, setActiveTab] = useState('active');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -129,6 +131,15 @@ export default function EscrowDashboard() {
       reload();
     } catch (err) {
       console.error('[Escrow] Rate failed:', err);
+    }
+  }
+
+  async function handleClaimExpired(escrowObjectId) {
+    try {
+      await claimExpiredEscrow(escrowObjectId);
+      reload();
+    } catch (err) {
+      console.error('[Escrow] Claim expired failed:', err);
     }
   }
 
@@ -289,6 +300,7 @@ export default function EscrowDashboard() {
                   onDispute={handleDispute}
                   onVoteRelease={handleVoteRelease}
                   onVoteRefund={handleVoteRefund}
+                  onClaimExpired={handleClaimExpired}
                   onRate={handleRate}
                 />
               </motion.div>

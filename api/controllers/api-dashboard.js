@@ -5,6 +5,7 @@
  */
 
 const db = require('../utility/db');
+const cache = require('../utility/cache');
 
 module.exports = {
   friendlyName: 'API Dashboard',
@@ -18,6 +19,11 @@ module.exports = {
 
   fn: async function () {
     try {
+      // Check cache first (TTL 10s)
+      const cached = cache.get('dashboard:stats');
+      if (cached) return cached;
+
+      const database = db.getDb();
       const Users = db.getModel('users');
       const Threads = db.getModel('threads');
       const Posts = db.getModel('posts');
@@ -28,38 +34,32 @@ module.exports = {
       const totalPosts = Posts.count();
       const totalCategories = Categories.count();
 
-      // Active users in last 24h (users who posted)
+      // Active users in last 24h — single aggregate query instead of loading 500 rows
       const oneDayAgo = Date.now() - 86400000;
-      const recentPosts = Posts.findAll({}, { sort: 'createdAt DESC', limit: 500 });
-      const activeUserIds = new Set();
-      for (const post of recentPosts) {
-        if (post.createdAt >= oneDayAgo) {
-          activeUserIds.add(post.authorId);
-        }
-      }
+      const activeRow = database.prepare(
+        'SELECT COUNT(DISTINCT authorId) as cnt FROM posts WHERE createdAt > ?'
+      ).get(oneDayAgo);
 
-      // Latest threads (enriched with author info + privacy)
-      const rawThreads = Threads.findAll(
-        { hidden: false },
-        { sort: 'createdAt DESC', limit: 5 }
-      );
-      const latestThreads = rawThreads.map(thread => {
-        const author = Users.findOne({ id: thread.authorId });
-        return {
-          ...thread,
-          authorUsername: (author?.showUsername) ? author.username : null,
-          authorShowUsername: author?.showUsername || 0,
-        };
-      });
+      // Latest threads (enriched with author info + privacy via JOIN)
+      const latestThreads = database.prepare(`
+        SELECT
+          t.*,
+          CASE WHEN u.showUsername = 1 THEN u.username ELSE NULL END as authorUsername,
+          COALESCE(u.showUsername, 0) as authorShowUsername
+        FROM threads t
+        LEFT JOIN users u ON t.authorId = u.id
+        WHERE t.hidden = 0
+        ORDER BY t.createdAt DESC
+        LIMIT 5
+      `).all();
 
       // Payment/marketplace stats
-      const database = db.getDb();
       let paymentStats = {};
       try {
         const totalTips = database.prepare('SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total FROM tips').get();
         const totalPurchases = database.prepare('SELECT COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total FROM purchases').get();
         const totalEscrows = database.prepare('SELECT COUNT(*) as cnt FROM escrows').get();
-        const activeEscrows = database.prepare('SELECT COUNT(*) as cnt FROM escrows WHERE status < 3').get(); // status < RESOLVED
+        const activeEscrows = database.prepare('SELECT COUNT(*) as cnt FROM escrows WHERE status < 3').get();
         const totalSubscriptions = database.prepare('SELECT COUNT(*) as cnt FROM subscriptions WHERE expiresAt > ?').get(Date.now());
         const totalBadges = database.prepare('SELECT COUNT(*) as cnt FROM user_badges').get();
 
@@ -71,22 +71,26 @@ module.exports = {
           badgesIssued: totalBadges.cnt,
         };
       } catch (e) {
-        // Payment tables may not exist yet in older DBs
         sails.log.verbose('[api-dashboard] Payment stats not available:', e.message);
       }
 
-      return {
+      const result = {
         success: true,
         stats: {
           totalUsers,
           totalThreads,
           totalPosts,
           totalCategories,
-          activeUsers24h: activeUserIds.size,
+          activeUsers24h: activeRow.cnt,
           latestThreads,
           ...paymentStats,
         },
       };
+
+      // Cache for 10 seconds
+      cache.set('dashboard:stats', result, 10000);
+
+      return result;
     } catch (err) {
       sails.log.error('[api-dashboard]', err.message || err);
       this.res.status(500);

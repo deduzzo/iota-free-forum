@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   User, Calendar, FileText, MessageSquare, Edit3, Save, X,
+  Users, UserPlus,
 } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/endpoints';
 import { useIdentity } from '../hooks/useIdentity';
 import LoadingSpinner from '../components/LoadingSpinner';
+import FollowButton from '../components/FollowButton';
 
 function formatDate(dateStr) {
   if (!dateStr) return '--';
@@ -33,6 +35,27 @@ export default function UserProfile() {
     () => api.getUser(id),
     [id],
     ['user'],
+  );
+
+  // Follow counts
+  const { data: followCounts } = useApi(
+    () => api.getFollowCounts(id),
+    [id],
+    ['follow'],
+  );
+
+  // Followers/following lists (for expandable section)
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const { data: followersData } = useApi(
+    () => showFollowers ? api.getFollowers(id) : Promise.resolve(null),
+    [id, showFollowers],
+    ['follow'],
+  );
+  const { data: followingData } = useApi(
+    () => showFollowing ? api.getFollowing(id) : Promise.resolve(null),
+    [id, showFollowing],
+    ['follow'],
   );
 
   const [editing, setEditing] = useState(false);
@@ -107,18 +130,41 @@ export default function UserProfile() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <h1
-              className="text-2xl font-bold mb-1"
-              style={{ fontFamily: 'var(--font-heading)' }}
-            >
-              {displayName}
-            </h1>
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h1
+                className="text-2xl font-bold"
+                style={{ fontFamily: 'var(--font-heading)' }}
+              >
+                {displayName}
+              </h1>
+              <FollowButton targetUserId={id} />
+            </div>
             <p
               className="font-mono text-xs mb-3 truncate"
               style={{ color: 'var(--color-text-muted)' }}
             >
               {id}
             </p>
+
+            {/* Follower / Following counts */}
+            <div className="flex items-center gap-4 text-sm mb-3">
+              <button
+                onClick={() => { setShowFollowers((v) => !v); setShowFollowing(false); }}
+                className="flex items-center gap-1 hover:underline transition-colors"
+                style={{ color: 'var(--color-text)' }}
+              >
+                <span className="font-bold">{followCounts?.followerCount ?? 0}</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>Followers</span>
+              </button>
+              <button
+                onClick={() => { setShowFollowing((v) => !v); setShowFollowers(false); }}
+                className="flex items-center gap-1 hover:underline transition-colors"
+                style={{ color: 'var(--color-text)' }}
+              >
+                <span className="font-bold">{followCounts?.followingCount ?? 0}</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>Following</span>
+              </button>
+            </div>
 
             {/* Join date */}
             <div
@@ -191,6 +237,60 @@ export default function UserProfile() {
           </div>
         </div>
       </motion.div>
+
+      {/* Followers / Following expandable list */}
+      {(showFollowers || showFollowing) && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="glass-card mb-6 overflow-hidden"
+        >
+          <h2
+            className="text-sm font-semibold uppercase tracking-wider mb-4 flex items-center gap-2"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            <Users size={14} />
+            {showFollowers ? 'Followers' : 'Following'}
+          </h2>
+          {(() => {
+            const list = showFollowers ? followersData?.users : followingData?.users;
+            if (!list || list.length === 0) {
+              return (
+                <p className="text-sm py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                  {showFollowers ? 'No followers yet.' : 'Not following anyone yet.'}
+                </p>
+              );
+            }
+            return (
+              <div className="space-y-2">
+                {list.map((u) => (
+                  <Link
+                    key={u.userId}
+                    to={`/u/${u.userId}`}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                      style={{ background: avatarGradient(u.userId) }}
+                    >
+                      {((u.showUsername && u.username) ? u.username[0] : u.userId?.[4] || '?').toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                        {(u.showUsername && u.username) ? u.username : u.userId?.slice(0, 12)}
+                      </p>
+                      <p className="text-xs font-mono truncate" style={{ color: 'var(--color-text-muted)' }}>
+                        {u.userId?.slice(0, 20)}...
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            );
+          })()}
+        </motion.div>
+      )}
 
       {/* Stats */}
       <motion.div

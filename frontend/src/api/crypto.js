@@ -12,6 +12,9 @@
 import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519';
 import { IotaClient, getFullnodeUrl } from '@iota/iota-sdk/client';
 import { Transaction } from '@iota/iota-sdk/transactions';
+import { decodeIotaPrivateKey as _decodeIotaPrivateKey } from '@iota/iota-sdk/cryptography';
+import { x25519 } from '@noble/curves/ed25519';
+import { edwardsToMontgomeryPub, edwardsToMontgomeryPriv } from '@noble/curves/ed25519';
 import { generateMnemonic as _genMnemonic, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
@@ -23,6 +26,8 @@ let _networkUrl = null;
 /**
  * Set the RPC endpoint URL for the IOTA client.
  * Call this after fetching /api/v1/forum-info to use the correct network.
+ * @param {string} url - Full RPC endpoint URL
+ * @returns {void}
  */
 export function setNetworkUrl(url) {
   if (url && url !== _networkUrl) {
@@ -33,6 +38,8 @@ export function setNetworkUrl(url) {
 
 /**
  * Configure the client from a network name (e.g. 'testnet', 'mainnet').
+ * @param {string} network - Network name ('testnet' | 'mainnet')
+ * @returns {void}
  */
 export function setNetwork(network) {
   const url = getFullnodeUrl(network);
@@ -42,6 +49,7 @@ export function setNetwork(network) {
 /**
  * Get the singleton IotaClient.
  * Falls back to testnet if not yet configured.
+ * @returns {import('@iota/iota-sdk/client').IotaClient}
  */
 export function getClient() {
   if (!_client) {
@@ -62,6 +70,7 @@ export const CLOCK_OBJECT_ID = '0x6';
 
 /**
  * Generate a 12-word BIP39 mnemonic.
+ * @returns {string} Space-separated 12-word mnemonic
  */
 export function generateMnemonic() {
   return _genMnemonic(wordlist, 128);
@@ -69,6 +78,8 @@ export function generateMnemonic() {
 
 /**
  * Validate a BIP39 mnemonic string.
+ * @param {string} mnemonic - Mnemonic to validate
+ * @returns {boolean}
  */
 export function isValidMnemonic(mnemonic) {
   if (!mnemonic || typeof mnemonic !== 'string') return false;
@@ -79,6 +90,8 @@ export function isValidMnemonic(mnemonic) {
 
 /**
  * Derive an Ed25519Keypair from a BIP39 mnemonic.
+ * @param {string} mnemonic - BIP39 mnemonic phrase
+ * @returns {import('@iota/iota-sdk/keypairs/ed25519').Ed25519Keypair}
  */
 export function keypairFromMnemonic(mnemonic) {
   return Ed25519Keypair.deriveKeypair(mnemonic.trim());
@@ -86,6 +99,8 @@ export function keypairFromMnemonic(mnemonic) {
 
 /**
  * Get the IOTA address (0x...) from a keypair.
+ * @param {import('@iota/iota-sdk/keypairs/ed25519').Ed25519Keypair} keypair
+ * @returns {string} IOTA address (0x...)
  */
 export function getAddress(keypair) {
   return keypair.getPublicKey().toIotaAddress();
@@ -117,6 +132,9 @@ async function deriveKeyFromPassword(password, salt) {
 /**
  * Encrypt mnemonic with a user password (AES-256-GCM).
  * Returns a base64 string containing: salt(16) || iv(12) || ciphertext+tag.
+ * @param {string} mnemonic - BIP39 mnemonic to encrypt
+ * @param {string} password - User password for encryption
+ * @returns {Promise<string>} Base64-encoded encrypted mnemonic
  */
 export async function encryptMnemonic(mnemonic, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -138,6 +156,10 @@ export async function encryptMnemonic(mnemonic, password) {
 /**
  * Decrypt mnemonic with user password (AES-256-GCM).
  * Throws on wrong password.
+ * @param {string} encryptedBase64 - Base64-encoded encrypted mnemonic
+ * @param {string} password - User password for decryption
+ * @returns {Promise<string>} Decrypted mnemonic phrase
+ * @throws {Error} If password is wrong or data is corrupted
  */
 export async function decryptMnemonic(encryptedBase64, password) {
   const data = new Uint8Array(base64ToArrayBuffer(encryptedBase64));
@@ -162,6 +184,9 @@ export async function decryptMnemonic(encryptedBase64, password) {
 /**
  * Sign a Transaction with the user's Ed25519 keypair and execute on the IOTA network.
  * Waits for confirmation before returning.
+ * @param {import('@iota/iota-sdk/keypairs/ed25519').Ed25519Keypair} keypair - User's keypair
+ * @param {import('@iota/iota-sdk/transactions').Transaction} transactionBlock - Transaction to sign and execute
+ * @returns {Promise<{digest: string, effects: Object, events: Object[]}>}
  */
 export async function signAndExecuteTransaction(keypair, transactionBlock) {
   const client = getClient();
@@ -179,6 +204,8 @@ export async function signAndExecuteTransaction(keypair, transactionBlock) {
 /**
  * Gzip-compress a JSON-serialisable object.
  * Returns Uint8Array suitable for passing as vector<u8> in Move calls.
+ * @param {Object} jsonObject - JSON-serializable object to compress
+ * @returns {Promise<Uint8Array>} Gzipped bytes
  */
 export async function gzipCompress(jsonObject) {
   const jsonStr = JSON.stringify(jsonObject);
@@ -331,4 +358,101 @@ export async function decryptRSA(ciphertext, privateKeyPem) {
   const cipherBuffer = base64ToArrayBuffer(ciphertext);
   const plainBuffer = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, key, cipherBuffer);
   return new TextDecoder().decode(plainBuffer);
+}
+
+// ─── X25519 DM Encryption (E2E via Diffie-Hellman) ─────────────────────────
+
+/**
+ * Convert Ed25519 private key (32 bytes seed) to X25519 private key.
+ * Used for Diffie-Hellman key exchange.
+ */
+export function ed25519ToX25519Private(ed25519PrivateKey) {
+  return edwardsToMontgomeryPriv(ed25519PrivateKey);
+}
+
+/**
+ * Convert Ed25519 public key (32 bytes) to X25519 public key.
+ */
+export function ed25519ToX25519Public(ed25519PublicKey) {
+  return edwardsToMontgomeryPub(ed25519PublicKey);
+}
+
+/**
+ * Derive a shared secret via X25519 Diffie-Hellman, then hash with SHA-256
+ * for use as AES-256-GCM key.
+ */
+export async function deriveSharedSecret(myX25519Private, theirX25519Public) {
+  const raw = x25519.getSharedSecret(myX25519Private, theirX25519Public);
+  // Hash the raw shared secret with Web Crypto SHA-256 for a uniform 256-bit key
+  const hashBuffer = await crypto.subtle.digest('SHA-256', raw);
+  return new Uint8Array(hashBuffer);
+}
+
+/**
+ * Encrypt a DM plaintext with AES-256-GCM using a shared secret.
+ * Returns { ciphertext: base64, iv: base64 }.
+ */
+export async function encryptDM(plaintext, sharedSecret) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await crypto.subtle.importKey(
+    'raw',
+    sharedSecret,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt'],
+  );
+  const encoded = new TextEncoder().encode(plaintext);
+  const cipherBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encoded,
+  );
+  return {
+    ciphertext: arrayBufferToBase64(cipherBuffer),
+    iv: arrayBufferToBase64(iv.buffer),
+  };
+}
+
+/**
+ * Decrypt a DM ciphertext with AES-256-GCM using a shared secret.
+ * @param {string} ciphertextB64 - base64 ciphertext
+ * @param {string} ivB64 - base64 IV
+ * @param {Uint8Array} sharedSecret - 32 bytes shared secret
+ */
+export async function decryptDM(ciphertextB64, ivB64, sharedSecret) {
+  const iv = new Uint8Array(base64ToArrayBuffer(ivB64));
+  const cipherBytes = new Uint8Array(base64ToArrayBuffer(ciphertextB64));
+  const key = await crypto.subtle.importKey(
+    'raw',
+    sharedSecret,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt'],
+  );
+  try {
+    const plainBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      cipherBytes,
+    );
+    return new TextDecoder().decode(plainBuffer);
+  } catch {
+    throw new Error('Failed to decrypt message — wrong key or corrupted data');
+  }
+}
+
+/**
+ * Get the raw Ed25519 keypair bytes for DM encryption.
+ * @param {Ed25519Keypair} keypair - IOTA SDK keypair
+ * @returns {{ privateKey: Uint8Array, publicKey: Uint8Array }}
+ */
+export function getKeypairBytes(keypair) {
+  const publicKey = keypair.getPublicKey().toRawBytes();
+  // The IOTA SDK Ed25519Keypair stores secretKey (32 bytes seed) on .keypair
+  // Decode from Bech32 via getSecretKey() as a fallback-safe approach
+  const bech32Key = keypair.getSecretKey();
+  // The bech32 encoded key from IOTA SDK: decode it
+  // Format: iotaprivkey1<bech32data> — we import the decode helper
+  const { secretKey: rawBytes } = _decodeIotaPrivateKey(bech32Key);
+  return { privateKey: rawBytes, publicKey };
 }

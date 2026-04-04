@@ -23,6 +23,10 @@ const DB_PATH = process.env.FORUM_DATA_DIR
 
 let database = null;
 
+/**
+ * Initialize the SQLite database, create tables and indexes, run migrations.
+ * @returns {import('better-sqlite3').Database} The initialized database instance
+ */
 function initDb() {
   if (database) return database;
 
@@ -143,7 +147,6 @@ function initDb() {
       entityId,
       title,
       content,
-      content='',
       tokenize='unicode61'
     );
 
@@ -233,7 +236,193 @@ function initDb() {
       comment TEXT,
       createdAt INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updatedAt TEXT
+    );
+
+    -- =====================================================================
+    -- Notifications (in-app notification system)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      fromUserId TEXT,
+      entityId TEXT,
+      message TEXT,
+      read INTEGER DEFAULT 0,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_userId ON notifications(userId);
+    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(userId, read);
+
+    -- =====================================================================
+    -- Reactions (emoji reactions on posts)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS reactions (
+      id TEXT PRIMARY KEY,
+      postId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      createdAt TEXT DEFAULT (datetime('now')),
+      UNIQUE(postId, userId, emoji)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reactions_postId ON reactions(postId);
+
+    -- =====================================================================
+    -- Transaction Audit Log (admin monitoring)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS transaction_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      txDigest TEXT,
+      tag TEXT NOT NULL,
+      entityId TEXT,
+      authorId TEXT,
+      action TEXT,
+      isEncrypted INTEGER DEFAULT 0,
+      dataPreview TEXT,
+      gasUsed INTEGER,
+      timestamp TEXT NOT NULL,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_txlog_tag ON transaction_log(tag);
+    CREATE INDEX IF NOT EXISTS idx_txlog_author ON transaction_log(authorId);
+    CREATE INDEX IF NOT EXISTS idx_txlog_timestamp ON transaction_log(timestamp);
+
+    -- =====================================================================
+    -- Direct Messages (encrypted E2E — server stores ciphertext only)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS direct_messages (
+      id TEXT PRIMARY KEY,
+      fromUserId TEXT NOT NULL,
+      toUserId TEXT NOT NULL,
+      encryptedContent TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      ephemeralPublicKey TEXT,
+      readAt TEXT,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dm_from ON direct_messages(fromUserId);
+    CREATE INDEX IF NOT EXISTS idx_dm_to ON direct_messages(toUserId);
+    CREATE INDEX IF NOT EXISTS idx_dm_conversation ON direct_messages(fromUserId, toUserId);
+
+    -- =====================================================================
+    -- Social Graph (follows)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS follows (
+      id TEXT PRIMARY KEY,
+      followerId TEXT NOT NULL,
+      followingId TEXT NOT NULL,
+      createdAt TEXT DEFAULT (datetime('now')),
+      UNIQUE(followerId, followingId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(followerId);
+    CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(followingId);
+
+    -- =====================================================================
+    -- Governance (polls & proposals)
+    -- =====================================================================
+
+    CREATE TABLE IF NOT EXISTS polls (
+      id TEXT PRIMARY KEY,
+      creatorId TEXT NOT NULL,
+      optionsCount INTEGER NOT NULL,
+      deadline TEXT NOT NULL,
+      closed INTEGER DEFAULT 0,
+      data TEXT,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS poll_votes (
+      id TEXT PRIMARY KEY,
+      pollId TEXT NOT NULL,
+      voterId TEXT NOT NULL,
+      optionIndex INTEGER NOT NULL,
+      createdAt TEXT DEFAULT (datetime('now')),
+      UNIQUE(pollId, voterId)
+    );
+
+    CREATE TABLE IF NOT EXISTS proposals (
+      id TEXT PRIMARY KEY,
+      creatorId TEXT NOT NULL,
+      quorum INTEGER NOT NULL,
+      deadline TEXT NOT NULL,
+      status INTEGER DEFAULT 0,
+      data TEXT,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS proposal_votes (
+      id TEXT PRIMARY KEY,
+      proposalId TEXT NOT NULL,
+      voterId TEXT NOT NULL,
+      voteYes INTEGER NOT NULL,
+      createdAt TEXT DEFAULT (datetime('now')),
+      UNIQUE(proposalId, voterId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_polls_creator ON polls(creatorId);
+    CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(pollId);
+    CREATE INDEX IF NOT EXISTS idx_proposals_creator ON proposals(creatorId);
+    CREATE INDEX IF NOT EXISTS idx_proposal_votes_proposal ON proposal_votes(proposalId);
   `);
+
+  // Migration: FTS5 contentless -> standard
+  // Old search_index used content='' which silently ignores DELETEs and returns NULL for title/content.
+  // Drop and recreate to get a proper FTS5 table with stored content.
+  try {
+    // Check if existing FTS table is contentless by trying a SELECT - title will be NULL for contentless
+    const ftsTest = database.prepare("SELECT title FROM search_index LIMIT 1").get();
+    // If we get here and the table exists but was contentless, we need to recreate it
+    // A contentless table returns NULL for all content columns even with data
+    // The safest approach: drop and let the CREATE VIRTUAL TABLE above recreate it
+    // This only runs once — after migration the new table works correctly
+  } catch (e) {
+    // Table doesn't exist or other error — the CREATE above will handle it
+  }
+  try {
+    // Force recreation: drop old contentless FTS table so the CREATE above takes effect
+    // We detect old format by checking if content='' was used (content column returns NULL)
+    const testRow = database.prepare("SELECT sql FROM sqlite_master WHERE name = 'search_index'").get();
+    if (testRow && testRow.sql && testRow.sql.includes("content=''")) {
+      database.exec('DROP TABLE IF EXISTS search_index');
+      database.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+          entityId,
+          title,
+          content,
+          tokenize='unicode61'
+        )
+      `);
+      sails.log?.info?.('[db] Migrated search_index from contentless to standard FTS5') || console.log('[db] Migrated search_index from contentless to standard FTS5');
+    }
+  } catch (e) {
+    // FTS5 virtual tables may not appear in sqlite_master with full SQL — try brute force
+    try {
+      database.exec('DROP TABLE IF EXISTS search_index');
+      database.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+          entityId,
+          title,
+          content,
+          tokenize='unicode61'
+        )
+      `);
+    } catch (e2) { /* already in new format */ }
+  }
 
   // Migrations: add columns that may be missing from older DBs
   const userCols = database.prepare("PRAGMA table_info(users)").all().map(c => c.name);
@@ -247,6 +436,8 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_posts_thread ON posts(threadId);
     CREATE INDEX IF NOT EXISTS idx_votes_post ON votes(postId);
     CREATE INDEX IF NOT EXISTS idx_roles_target ON roles(targetUserId);
+    CREATE INDEX IF NOT EXISTS idx_posts_createdAt ON posts(createdAt);
+    CREATE INDEX IF NOT EXISTS idx_threads_createdAt ON threads(createdAt);
     CREATE INDEX IF NOT EXISTS idx_tips_post ON tips(postId);
     CREATE INDEX IF NOT EXISTS idx_tips_toUser ON tips(toUser);
     CREATE INDEX IF NOT EXISTS idx_purchases_buyer ON purchases(buyer);
@@ -276,6 +467,10 @@ function initDb() {
   return database;
 }
 
+/**
+ * Get the active database instance. Throws if initDb() has not been called.
+ * @returns {import('better-sqlite3').Database}
+ */
 function getDb() {
   if (!database) throw new Error('Database not initialized — call initDb() first');
   return database;
@@ -321,6 +516,21 @@ function buildSelect(tableName, where, options = {}) {
 // Part 3: getModel factory
 // ---------------------------------------------------------------------------
 
+/**
+ * @typedef {Object} Model
+ * @property {(where?: Object, options?: {sort?: string, limit?: number, offset?: number}) => Object[]} findAll
+ * @property {(where: Object) => Object|null} findOne
+ * @property {(data: Object) => Object} create
+ * @property {(id: string, data: Object) => Object|null} update
+ * @property {(id: string) => void} delete
+ * @property {(where?: Object) => number} count
+ */
+
+/**
+ * Factory that returns a CRUD model for the given SQLite table.
+ * @param {string} tableName - Name of the SQLite table
+ * @returns {Model}
+ */
 function getModel(tableName) {
   function toRow(data) {
     const row = {};
@@ -411,6 +621,11 @@ function checkNonce(nonce) {
 // Part 5: FTS5 search
 // ---------------------------------------------------------------------------
 
+/**
+ * Full-text search across threads and posts.
+ * @param {string} query - FTS5 match query string
+ * @returns {{entityId: string, title: string, content: string}[]}
+ */
 function searchFts(query) {
   const db = getDb();
   return db.prepare(
@@ -418,11 +633,57 @@ function searchFts(query) {
   ).all(query);
 }
 
+/**
+ * Update or insert a full-text search index entry.
+ * @param {string} entityId - The entity ID (thread or post ID)
+ * @param {string} title - Title text to index
+ * @param {string} content - Content text to index
+ * @returns {void}
+ */
 function updateFtsIndex(entityId, title, content) {
   const db = getDb();
-  // Delete old entry first, then insert new one (content='' table requires manual sync)
-  db.prepare('INSERT INTO search_index(search_index, entityId, title, content) VALUES(\'delete\', ?, ?, ?)').run(entityId, title || '', content || '');
+  // Standard FTS5 table: DELETE by entityId, then INSERT fresh row
+  db.prepare('DELETE FROM search_index WHERE entityId = ?').run(entityId);
   db.prepare('INSERT INTO search_index(entityId, title, content) VALUES(?, ?, ?)').run(entityId, title || '', content || '');
+}
+
+/**
+ * Remove a full-text search index entry.
+ * @param {string} entityId - The entity ID to remove from the index
+ * @returns {void}
+ */
+function removeFtsEntry(entityId) {
+  const db = getDb();
+  db.prepare('DELETE FROM search_index WHERE entityId = ?').run(entityId);
+}
+
+// ---------------------------------------------------------------------------
+// Part 5b: sync_state helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get a sync state value by key.
+ * @param {string} key - Sync state key (e.g. 'lastEventCursor', 'lastRepairCursor')
+ * @returns {string|null} The stored value, or null if not found
+ */
+function getSyncState(key) {
+  const db = getDb();
+  const row = db.prepare('SELECT value FROM sync_state WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+/**
+ * Set a sync state value (upsert).
+ * @param {string} key - Sync state key
+ * @param {string} value - Value to store
+ * @returns {void}
+ */
+function setSyncState(key, value) {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO sync_state (key, value, updatedAt) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt`
+  ).run(key, value, new Date().toISOString());
 }
 
 // ---------------------------------------------------------------------------
@@ -540,6 +801,9 @@ module.exports = {
   checkNonce,
   searchFts,
   updateFtsIndex,
+  removeFtsEntry,
+  getSyncState,
+  setSyncState,
   getCategoryStats,
   getThreadsByCategory,
   getThreadDetail,

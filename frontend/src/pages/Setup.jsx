@@ -95,10 +95,24 @@ export default function Setup() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Parse connection string: network:packageId:forumObjectId
+  // Parse connection string:
+  // New format (7 segments): network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId
+  // Legacy format (3 segments): network:packageId:forumObjectId
+  // Legacy format (2 segments): network:address
   const parseConnectionString = (str) => {
     const trimmed = str.trim();
     const parts = trimmed.split(':');
+    if (parts.length === 7) {
+      return {
+        network: parts[0],
+        packageId: parts[1],
+        forumObjectId: parts[2],
+        registryId: parts[3],
+        treasuryId: parts[4],
+        subscriptionStoreId: parts[5],
+        marketplaceStoreId: parts[6],
+      };
+    }
     if (parts.length === 3) {
       return { network: parts[0], packageId: parts[1], forumObjectId: parts[2] };
     }
@@ -358,7 +372,7 @@ export default function Setup() {
                 Collegati a un forum
               </h2>
               <p className="mb-6 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Inserisci la stringa di connessione del forum (network:packageId:forumObjectId).
+                Inserisci la stringa di connessione del forum. Formato completo: network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId
               </p>
 
               <div className="space-y-4">
@@ -370,7 +384,7 @@ export default function Setup() {
                     type="text"
                     value={connectAddress}
                     onChange={e => setConnectAddress(e.target.value)}
-                    placeholder="testnet:0xPACKAGE_ID:0xFORUM_OBJECT_ID"
+                    placeholder="testnet:0xPKG:0xFORUM:0xREGISTRY:0xTREASURY:0xSUBSTORE:0xMKTSTORE"
                     className="w-full p-3 rounded-lg text-sm font-mono"
                     style={{
                       backgroundColor: 'var(--color-background)',

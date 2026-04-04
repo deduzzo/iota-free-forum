@@ -5,6 +5,8 @@ import io from 'socket.io-client';
 let _socket = null;
 let _listeners = new Set();
 
+let _notifListeners = new Set();
+
 function getSocket() {
   if (!_socket) {
     // socket.io v2 client compatibile con Sails.js (server socket.io v2)
@@ -25,6 +27,13 @@ function getSocket() {
       console.log('[ws] dataChanged:', data?.action, data?.label);
       _listeners.forEach(fn => fn(data));
     });
+    // Relay newNotification events
+    _socket.on('newNotification', (data) => {
+      console.log('[ws] newNotification:', data?.notification?.type);
+      _notifListeners.forEach(fn => fn(data));
+    });
+    // Expose globally for components that need direct access
+    window.__iotaSocket = _socket;
   }
   return _socket;
 }
@@ -98,6 +107,28 @@ export function useRealtimeRefresh(reloadFn, filterEntities = null) {
  * @param {function} onEvent - callback (wsData) => void, riceve il payload del broadcast
  * @param {string[]} filterEntities - entity types da ascoltare (es. ['post', 'thread'])
  */
+/**
+ * Hook per notifiche real-time via WebSocket.
+ * Ascolta eventi 'newNotification' e chiama onNotification(data).
+ */
+export function useNotificationListener(onNotification) {
+  const onNotifRef = useRef(onNotification);
+  onNotifRef.current = onNotification;
+
+  useEffect(() => {
+    getSocket();
+
+    const handler = (data) => {
+      onNotifRef.current?.(data);
+    };
+
+    _notifListeners.add(handler);
+    return () => {
+      _notifListeners.delete(handler);
+    };
+  }, []);
+}
+
 export function useRealtimeUpdate(onEvent, filterEntities = null) {
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;

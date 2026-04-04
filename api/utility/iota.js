@@ -978,12 +978,17 @@ function isMoveModeEnabled() {
 
 /**
  * Get Move contract IDs from config.
+ * Returns all 5 shared object IDs + adminCap.
  */
 function _getMoveConfig() {
   const config = _getConfig();
   return {
     packageId: config.FORUM_PACKAGE_ID,
     forumObjectId: config.FORUM_OBJECT_ID,
+    registryId: config.FORUM_REGISTRY_ID,
+    treasuryId: config.FORUM_TREASURY_ID,
+    subscriptionStoreId: config.FORUM_SUBSCRIPTION_STORE_ID,
+    marketplaceStoreId: config.FORUM_MARKETPLACE_STORE_ID,
     adminCapId: config.ADMIN_CAP_ID,
   };
 }
@@ -1004,7 +1009,7 @@ async function publishDataMove(tag, dataObject, entityId, version = 1) {
       const sdk = await loadSdk();
       const client = await getClient();
       const keypair = await getKeypair();
-      const { packageId, forumObjectId, adminCapId } = _getMoveConfig();
+      const { packageId, forumObjectId, registryId, adminCapId } = _getMoveConfig();
 
       if (!packageId || !forumObjectId) {
         throw new Error('Move contract not deployed. Run move-publish.js first.');
@@ -1025,7 +1030,7 @@ async function publishDataMove(tag, dataObject, entityId, version = 1) {
       const isAdmin = ADMIN_TAGS.includes(tag);
       const isMod = MOD_TAGS.includes(tag);
 
-      // Route to the correct Move function based on required permission level
+      // Common args for post_event / mod_post_event / admin_post_event
       const commonArgs = [
         tx.pure.vector('u8', Array.from(Buffer.from(tag, 'utf8'))),
         tx.pure.vector('u8', Array.from(Buffer.from(entityId, 'utf8'))),
@@ -1035,33 +1040,33 @@ async function publishDataMove(tag, dataObject, entityId, version = 1) {
       ];
 
       if (isRegistration) {
-        // register() — open to anyone, one-time
+        // register(registry, entity_id, data, clock) — takes UserRegistry only
         tx.moveCall({
           target: `${packageId}::forum::register`,
           arguments: [
-            tx.object(forumObjectId),
+            tx.object(registryId),
             tx.pure.vector('u8', Array.from(Buffer.from(entityId, 'utf8'))),
             tx.pure.vector('u8', Array.from(compressed)),
             tx.object(CLOCK_OBJECT_ID),
           ],
         });
       } else if (isAdmin) {
-        // admin_post_event() — requires ROLE_ADMIN on-chain
+        // admin_post_event(forum, registry, tag, entity_id, data, version, clock)
         tx.moveCall({
           target: `${packageId}::forum::admin_post_event`,
-          arguments: [tx.object(forumObjectId), ...commonArgs],
+          arguments: [tx.object(forumObjectId), tx.object(registryId), ...commonArgs],
         });
       } else if (isMod) {
-        // mod_post_event() — requires ROLE_MODERATOR on-chain
+        // mod_post_event(forum, registry, tag, entity_id, data, version, clock)
         tx.moveCall({
           target: `${packageId}::forum::mod_post_event`,
-          arguments: [tx.object(forumObjectId), ...commonArgs],
+          arguments: [tx.object(forumObjectId), tx.object(registryId), ...commonArgs],
         });
       } else {
-        // post_event() — requires ROLE_USER (active, not banned)
+        // post_event(forum, registry, tag, entity_id, data, version, clock)
         tx.moveCall({
           target: `${packageId}::forum::post_event`,
-          arguments: [tx.object(forumObjectId), ...commonArgs],
+          arguments: [tx.object(forumObjectId), tx.object(registryId), ...commonArgs],
         });
       }
 
@@ -1113,13 +1118,13 @@ async function setUserRole(targetAddress, newRole) {
       const sdk = await loadSdk();
       const client = await getClient();
       const keypair = await getKeypair();
-      const { packageId, forumObjectId } = _getMoveConfig();
+      const { packageId, registryId } = _getMoveConfig();
 
       const tx = new sdk.Transaction();
       tx.moveCall({
         target: `${packageId}::forum::set_user_role`,
         arguments: [
-          tx.object(forumObjectId),
+          tx.object(registryId),
           tx.pure.address(targetAddress),
           tx.pure.u8(newRole),
           tx.object(CLOCK_OBJECT_ID),
@@ -1198,6 +1203,26 @@ async function queryForumEvents(remotePackageId = null) {
               tag: 'ROLE_CHANGED',
               entityId: parsed.user,
               author: parsed.changed_by,
+            });
+            totalEvents++;
+          }
+          // Handle EscrowUpdated events (emitted by mark_delivered, open_dispute, vote_release, vote_refund, claim_expired)
+          else if (parsed?.escrow_id && parsed?.action) {
+            sails.log.info(`[iota] EscrowUpdated event: escrow_id=${parsed.escrow_id} action=${parsed.action} actor=${parsed.actor}`);
+            if (!byTag['FORUM_ESCROW_UPDATED']) byTag['FORUM_ESCROW_UPDATED'] = [];
+            byTag['FORUM_ESCROW_UPDATED'].push({
+              payload: {
+                id: parsed.escrow_id,
+                escrowId: parsed.escrow_id,
+                action: parsed.action,
+                actor: parsed.actor,
+              },
+              version: 1,
+              timestamp: parsed.timestamp ? Number(parsed.timestamp) : null,
+              digest: ev.id?.txDigest,
+              tag: 'FORUM_ESCROW_UPDATED',
+              entityId: parsed.escrow_id,
+              author: parsed.actor,
             });
             totalEvents++;
           } else {
@@ -1283,7 +1308,47 @@ async function queryForumEventsSince(startCursor = null) {
     for (const ev of result.data) {
       try {
         const parsed = ev.parsedJson;
-        if (!parsed || !parsed.tag) continue;
+        if (!parsed) continue;
+
+        // Handle non-ForumEvent structs (no tag field)
+        if (!parsed.tag) {
+          // RoleChanged
+          if (parsed.new_role !== undefined && parsed.user) {
+            const roleNames = { 0: 'banned', 1: 'user', 2: 'moderator', 3: 'admin' };
+            events.push({
+              payload: {
+                targetUserId: parsed.user,
+                role: roleNames[parsed.new_role] || 'user',
+                oldRole: roleNames[parsed.old_role] || 'user',
+                grantedBy: parsed.changed_by,
+              },
+              version: 1,
+              timestamp: parsed.timestamp ? Number(parsed.timestamp) : null,
+              digest: ev.id?.txDigest,
+              tag: 'ROLE_CHANGED',
+              entityId: parsed.user,
+              author: parsed.changed_by,
+            });
+          }
+          // EscrowUpdated
+          else if (parsed.escrow_id && parsed.action) {
+            events.push({
+              payload: {
+                id: parsed.escrow_id,
+                escrowId: parsed.escrow_id,
+                action: parsed.action,
+                actor: parsed.actor,
+              },
+              version: 1,
+              timestamp: parsed.timestamp ? Number(parsed.timestamp) : null,
+              digest: ev.id?.txDigest,
+              tag: 'FORUM_ESCROW_UPDATED',
+              entityId: parsed.escrow_id,
+              author: parsed.actor,
+            });
+          }
+          continue;
+        }
 
         let payload;
         try {
@@ -1342,7 +1407,47 @@ async function subscribeToForumEvents(onEvent) {
     onMessage: (event) => {
       try {
         const parsed = event.parsedJson;
-        if (!parsed || !parsed.tag) return;
+        if (!parsed) return;
+
+        // Handle non-ForumEvent structs (no tag field)
+        if (!parsed.tag) {
+          // RoleChanged
+          if (parsed.new_role !== undefined && parsed.user) {
+            const roleNames = { 0: 'banned', 1: 'user', 2: 'moderator', 3: 'admin' };
+            onEvent({
+              payload: {
+                targetUserId: parsed.user,
+                role: roleNames[parsed.new_role] || 'user',
+                oldRole: roleNames[parsed.old_role] || 'user',
+                grantedBy: parsed.changed_by,
+              },
+              version: 1,
+              timestamp: parsed.timestamp ? Number(parsed.timestamp) : null,
+              digest: event.id?.txDigest,
+              tag: 'ROLE_CHANGED',
+              entityId: parsed.user,
+              author: parsed.changed_by,
+            });
+          }
+          // EscrowUpdated
+          else if (parsed.escrow_id && parsed.action) {
+            onEvent({
+              payload: {
+                id: parsed.escrow_id,
+                escrowId: parsed.escrow_id,
+                action: parsed.action,
+                actor: parsed.actor,
+              },
+              version: 1,
+              timestamp: parsed.timestamp ? Number(parsed.timestamp) : null,
+              digest: event.id?.txDigest,
+              tag: 'FORUM_ESCROW_UPDATED',
+              entityId: parsed.escrow_id,
+              author: parsed.actor,
+            });
+          }
+          return;
+        }
 
         let payload;
         try {

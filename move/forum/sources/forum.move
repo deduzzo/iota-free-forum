@@ -21,11 +21,8 @@ module forum::forum {
     const ESCROW_RESOLVED: u8 = 3;
 
     // ── Fee constants ───────────────────────────────────────────────
-    /// Marketplace: 5% fee to treasury (expressed as divisor: amount / 20)
     const MARKETPLACE_FEE_DIVISOR: u64 = 20;
-    /// Escrow: 2% fee to treasury (expressed as divisor: amount / 50)
     const ESCROW_FEE_DIVISOR: u64 = 50;
-    /// Votes needed to resolve escrow
     const VOTES_REQUIRED: u64 = 2;
 
     // ── Errors ──────────────────────────────────────────────────────
@@ -64,6 +61,31 @@ module forum::forum {
     const E_CANNOT_RATE_SELF: u64 = 32;
     const E_OWN_CONTENT: u64 = 33;
     const E_ESCROW_EXPIRED: u64 = 34;
+    const E_ALREADY_RATED: u64 = 35;
+    const E_NOT_EXPIRED: u64 = 36;
+    const E_ALREADY_RESOLVED: u64 = 37;
+    const E_CANNOT_FOLLOW_SELF: u64 = 38;
+    const E_ALREADY_FOLLOWING: u64 = 39;
+    const E_NOT_FOLLOWING: u64 = 40;
+    const E_POLL_NOT_FOUND: u64 = 41;
+    const E_POLL_CLOSED: u64 = 42;
+    const E_POLL_EXPIRED: u64 = 43;
+    const E_POLL_ALREADY_VOTED: u64 = 44;
+    const E_INVALID_OPTION: u64 = 45;
+    const E_POLL_ALREADY_EXISTS: u64 = 46;
+    const E_PROPOSAL_NOT_FOUND: u64 = 47;
+    const E_PROPOSAL_CLOSED: u64 = 48;
+    const E_PROPOSAL_EXPIRED: u64 = 49;
+    const E_PROPOSAL_ALREADY_VOTED: u64 = 50;
+    const E_PROPOSAL_ALREADY_EXISTS: u64 = 51;
+    const E_NOT_POLL_CREATOR_OR_ADMIN: u64 = 52;
+    const E_NOT_PROPOSAL_CREATOR_OR_ADMIN: u64 = 53;
+
+    // ── Proposal status codes ──────────────────────────────────────
+    const PROPOSAL_ACTIVE: u8 = 0;
+    const PROPOSAL_PASSED: u8 = 1;
+    const PROPOSAL_REJECTED: u8 = 2;
+    const PROPOSAL_EXPIRED: u8 = 3;
 
     // ── Structs ─────────────────────────────────────────────────────
 
@@ -99,29 +121,68 @@ module forum::forum {
         rating_count: u64,
     }
 
-    /// Shared object — the forum itself.
+    public struct Poll has store {
+        creator: address,
+        options_count: u8,
+        votes: Table<address, u8>,
+        deadline: u64,
+        closed: bool,
+    }
+
+    public struct Proposal has store {
+        creator: address,
+        quorum: u64,
+        yes_votes: vector<address>,
+        no_votes: vector<address>,
+        deadline: u64,
+        status: u8,
+    }
+
+    // ── 6 Shared objects ────────────────────────────────────────────
+
+    /// Minimal forum object — only tracks events and admin.
     public struct Forum has key, store {
         id: UID,
         admin: address,
         event_count: u64,
-        user_count: u64,
-        version: u64,
-        /// User registry: address -> role level
+    }
+
+    /// User registry — registrations, roles, and social graph.
+    public struct UserRegistry has key, store {
+        id: UID,
         users: Table<address, u8>,
-        /// Subscription state per user
-        subscriptions: Table<address, Subscription>,
-        /// Admin-configured subscription tiers
-        subscription_tiers: Table<u8, SubscriptionTier>,
-        /// Paid content registry: content_id -> PaidContent
+        user_count: u64,
+        follows: Table<address, vector<address>>,
+    }
+
+    /// Treasury — collects fees.
+    public struct Treasury has key, store {
+        id: UID,
+        balance: Balance<IOTA>,
+    }
+
+    /// Subscription store — tiers and user subscriptions.
+    public struct SubscriptionStore has key, store {
+        id: UID,
+        tiers: Table<u8, SubscriptionTier>,
+        user_subscriptions: Table<address, Subscription>,
+    }
+
+    /// Marketplace store — paid content, badges, reputations.
+    public struct MarketplaceStore has key, store {
+        id: UID,
         paid_contents: Table<String, PaidContent>,
-        /// Admin-configured badges
+        user_purchases: Table<address, vector<String>>,
         badges: Table<u8, Badge>,
-        /// Badges owned by each user
         user_badges: Table<address, vector<u8>>,
-        /// User reputation from escrow trades
         reputations: Table<address, UserReputation>,
-        /// Forum treasury (collects fees)
-        treasury: Balance<IOTA>,
+    }
+
+    /// Governance store — polls and proposals.
+    public struct GovernanceStore has key, store {
+        id: UID,
+        polls: Table<String, Poll>,
+        proposals: Table<String, Proposal>,
     }
 
     /// Capability object — only the forum creator holds this.
@@ -142,12 +203,12 @@ module forum::forum {
         status: u8,
         release_votes: vector<address>,
         refund_votes: vector<address>,
+        rated_by: vector<address>,
         balance: Balance<IOTA>,
     }
 
     // ── Events ──────────────────────────────────────────────────────
 
-    /// Single event struct for all forum data.
     public struct ForumEvent has copy, drop {
         tag: String,
         entity_id: String,
@@ -157,7 +218,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when a user's role changes.
     public struct RoleChanged has copy, drop {
         user: address,
         old_role: u8,
@@ -166,7 +226,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when a tip is sent.
     public struct TipEvent has copy, drop {
         from: address,
         to: address,
@@ -175,7 +234,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when a subscription is created or renewed.
     public struct SubscriptionEvent has copy, drop {
         user: address,
         tier: u8,
@@ -183,7 +241,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when paid content is purchased.
     public struct PurchaseEvent has copy, drop {
         buyer: address,
         content_id: String,
@@ -193,14 +250,12 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when a badge is purchased.
     public struct BadgeEvent has copy, drop {
         user: address,
         badge_id: u8,
         timestamp: u64,
     }
 
-    /// Emitted when an escrow is created.
     public struct EscrowCreated has copy, drop {
         escrow_id: ID,
         buyer: address,
@@ -211,7 +266,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when an escrow status changes.
     public struct EscrowUpdated has copy, drop {
         escrow_id: ID,
         action: String,
@@ -219,7 +273,6 @@ module forum::forum {
         timestamp: u64,
     }
 
-    /// Emitted when a trade is rated.
     public struct RatingEvent has copy, drop {
         escrow_id: ID,
         rater: address,
@@ -229,29 +282,50 @@ module forum::forum {
         timestamp: u64,
     }
 
-    // ── Init (runs once on deploy) ──────────────────────────────────
+    // ── Init ────────────────────────────────────────────────────────
 
     fun init(ctx: &mut TxContext) {
         let sender = ctx.sender();
 
-        let mut forum = Forum {
+        let forum = Forum {
             id: object::new(ctx),
             admin: sender,
             event_count: 0,
-            user_count: 1,
-            version: 2,
+        };
+
+        let mut registry = UserRegistry {
+            id: object::new(ctx),
             users: table::new(ctx),
-            subscriptions: table::new(ctx),
-            subscription_tiers: table::new(ctx),
+            user_count: 1,
+            follows: table::new(ctx),
+        };
+        table::add(&mut registry.users, sender, ROLE_ADMIN);
+
+        let treasury = Treasury {
+            id: object::new(ctx),
+            balance: balance::zero(),
+        };
+
+        let sub_store = SubscriptionStore {
+            id: object::new(ctx),
+            tiers: table::new(ctx),
+            user_subscriptions: table::new(ctx),
+        };
+
+        let marketplace = MarketplaceStore {
+            id: object::new(ctx),
             paid_contents: table::new(ctx),
+            user_purchases: table::new(ctx),
             badges: table::new(ctx),
             user_badges: table::new(ctx),
             reputations: table::new(ctx),
-            treasury: balance::zero(),
         };
 
-        // Deployer is auto-registered as ADMIN
-        table::add(&mut forum.users, sender, ROLE_ADMIN);
+        let governance = GovernanceStore {
+            id: object::new(ctx),
+            polls: table::new(ctx),
+            proposals: table::new(ctx),
+        };
 
         let admin_cap = AdminCap {
             id: object::new(ctx),
@@ -259,48 +333,47 @@ module forum::forum {
         };
 
         transfer::share_object(forum);
+        transfer::share_object(registry);
+        transfer::share_object(treasury);
+        transfer::share_object(sub_store);
+        transfer::share_object(marketplace);
+        transfer::share_object(governance);
         transfer::transfer(admin_cap, sender);
     }
 
     // ── Internal helpers ────────────────────────────────────────────
 
-    /// Get user role (0 if not registered).
-    fun get_role(forum: &Forum, user: address): u8 {
-        if (table::contains(&forum.users, user)) {
-            *table::borrow(&forum.users, user)
+    fun get_role(registry: &UserRegistry, user: address): u8 {
+        if (table::contains(&registry.users, user)) {
+            *table::borrow(&registry.users, user)
         } else {
             0
         }
     }
 
-    /// Assert caller is registered and not banned.
-    fun assert_active_user(forum: &Forum, user: address) {
-        assert!(table::contains(&forum.users, user), E_NOT_REGISTERED);
-        let role = *table::borrow(&forum.users, user);
+    fun assert_active_user(registry: &UserRegistry, user: address) {
+        assert!(table::contains(&registry.users, user), E_NOT_REGISTERED);
+        let role = *table::borrow(&registry.users, user);
         assert!(role > ROLE_BANNED, E_BANNED);
     }
 
-    /// Assert caller has at least the required role.
-    fun assert_min_role(forum: &Forum, user: address, min_role: u8) {
-        assert!(table::contains(&forum.users, user), E_NOT_REGISTERED);
-        let role = *table::borrow(&forum.users, user);
+    fun assert_min_role(registry: &UserRegistry, user: address, min_role: u8) {
+        assert!(table::contains(&registry.users, user), E_NOT_REGISTERED);
+        let role = *table::borrow(&registry.users, user);
         assert!(role >= min_role, E_INSUFFICIENT_ROLE);
     }
 
-    /// Check that a subscription is active and meets the required tier.
-    fun assert_subscription(forum: &Forum, user: address, required_tier: u8, clock: &Clock) {
-        assert!(table::contains(&forum.subscriptions, user), E_NO_SUBSCRIPTION);
-        let sub = table::borrow(&forum.subscriptions, user);
+    fun assert_subscription(store: &SubscriptionStore, user: address, required_tier: u8, clock: &Clock) {
+        assert!(table::contains(&store.user_subscriptions, user), E_NO_SUBSCRIPTION);
+        let sub = table::borrow(&store.user_subscriptions, user);
         assert!(sub.expires_at > clock.timestamp_ms(), E_SUBSCRIPTION_EXPIRED);
         assert!(sub.tier >= required_tier, E_SUBSCRIPTION_TIER_TOO_LOW);
     }
 
-    /// Check that a subscription has not expired.
     fun assert_not_expired(sub: &Subscription, clock: &Clock) {
         assert!(sub.expires_at > clock.timestamp_ms(), E_SUBSCRIPTION_EXPIRED);
     }
 
-    /// Check if address is one of the 3 escrow parties.
     fun assert_escrow_party(escrow: &Escrow, addr: address) {
         assert!(
             addr == escrow.buyer || addr == escrow.seller || addr == escrow.arbitrator,
@@ -308,7 +381,6 @@ module forum::forum {
         );
     }
 
-    /// Check if address has already voted in a vote list.
     fun has_voted(votes: &vector<address>, addr: address): bool {
         let len = votes.length();
         let mut i = 0;
@@ -321,10 +393,9 @@ module forum::forum {
         false
     }
 
-    /// Ensure or initialize a UserReputation entry.
-    fun ensure_reputation(forum: &mut Forum, user: address) {
-        if (!table::contains(&forum.reputations, user)) {
-            table::add(&mut forum.reputations, user, UserReputation {
+    fun ensure_reputation(marketplace: &mut MarketplaceStore, user: address) {
+        if (!table::contains(&marketplace.reputations, user)) {
+            table::add(&mut marketplace.reputations, user, UserReputation {
                 total_trades: 0,
                 successful: 0,
                 disputes_won: 0,
@@ -337,23 +408,21 @@ module forum::forum {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // ── EXISTING ENTRY FUNCTIONS (preserved) ─────────────────────────
+    // ── REGISTRATION ─────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════
 
-    /// Register a new user — open to anyone, one-time per address.
     public entry fun register(
-        forum: &mut Forum,
+        registry: &mut UserRegistry,
         entity_id: vector<u8>,
         data: vector<u8>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert!(!table::contains(&forum.users, sender), E_ALREADY_REGISTERED);
+        assert!(!table::contains(&registry.users, sender), E_ALREADY_REGISTERED);
 
-        table::add(&mut forum.users, sender, ROLE_USER);
-        forum.user_count = forum.user_count + 1;
-        forum.event_count = forum.event_count + 1;
+        table::add(&mut registry.users, sender, ROLE_USER);
+        registry.user_count = registry.user_count + 1;
 
         event::emit(ForumEvent {
             tag: string::utf8(b"FORUM_USER"),
@@ -365,9 +434,13 @@ module forum::forum {
         });
     }
 
-    /// Post a forum event — requires ROLE_USER or higher.
+    // ══════════════════════════════════════════════════════════════════
+    // ── FORUM EVENTS ─────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+
     public entry fun post_event(
         forum: &mut Forum,
+        registry: &UserRegistry,
         tag: vector<u8>,
         entity_id: vector<u8>,
         data: vector<u8>,
@@ -376,10 +449,8 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
-
+        assert_active_user(registry, sender);
         forum.event_count = forum.event_count + 1;
-
         event::emit(ForumEvent {
             tag: string::utf8(tag),
             entity_id: string::utf8(entity_id),
@@ -390,9 +461,9 @@ module forum::forum {
         });
     }
 
-    /// Post a moderator-level event — requires ROLE_MODERATOR or higher.
     public entry fun mod_post_event(
         forum: &mut Forum,
+        registry: &UserRegistry,
         tag: vector<u8>,
         entity_id: vector<u8>,
         data: vector<u8>,
@@ -401,10 +472,8 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_min_role(forum, sender, ROLE_MODERATOR);
-
+        assert_min_role(registry, sender, ROLE_MODERATOR);
         forum.event_count = forum.event_count + 1;
-
         event::emit(ForumEvent {
             tag: string::utf8(tag),
             entity_id: string::utf8(entity_id),
@@ -415,9 +484,9 @@ module forum::forum {
         });
     }
 
-    /// Post an admin-level event — requires ROLE_ADMIN.
     public entry fun admin_post_event(
         forum: &mut Forum,
+        registry: &UserRegistry,
         tag: vector<u8>,
         entity_id: vector<u8>,
         data: vector<u8>,
@@ -426,10 +495,8 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_min_role(forum, sender, ROLE_ADMIN);
-
+        assert_min_role(registry, sender, ROLE_ADMIN);
         forum.event_count = forum.event_count + 1;
-
         event::emit(ForumEvent {
             tag: string::utf8(tag),
             entity_id: string::utf8(entity_id),
@@ -440,26 +507,29 @@ module forum::forum {
         });
     }
 
-    /// Change a user's role — requires ROLE_MODERATOR or higher.
+    // ══════════════════════════════════════════════════════════════════
+    // ── ROLES ────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+
     public entry fun set_user_role(
-        forum: &mut Forum,
+        registry: &mut UserRegistry,
         target: address,
         new_role: u8,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_min_role(forum, sender, ROLE_MODERATOR);
+        assert_min_role(registry, sender, ROLE_MODERATOR);
         assert!(sender != target, E_CANNOT_CHANGE_OWN_ROLE);
-        assert!(table::contains(&forum.users, target), E_TARGET_NOT_REGISTERED);
+        assert!(table::contains(&registry.users, target), E_TARGET_NOT_REGISTERED);
 
-        let sender_role = *table::borrow(&forum.users, sender);
+        let sender_role = *table::borrow(&registry.users, sender);
         assert!(new_role <= sender_role, E_CANNOT_PROMOTE_ABOVE_SELF);
-        let target_role = *table::borrow(&forum.users, target);
+        let target_role = *table::borrow(&registry.users, target);
         assert!(target_role < sender_role, E_INSUFFICIENT_ROLE);
 
-        let old_role = table::remove(&mut forum.users, target);
-        table::add(&mut forum.users, target, new_role);
+        let old_role = table::remove(&mut registry.users, target);
+        table::add(&mut registry.users, target, new_role);
 
         event::emit(RoleChanged {
             user: target,
@@ -470,7 +540,6 @@ module forum::forum {
         });
     }
 
-    /// Transfer AdminCap — ultimate ownership transfer.
     public entry fun transfer_admin(cap: AdminCap, new_admin: address) {
         transfer::transfer(cap, new_admin);
     }
@@ -479,10 +548,8 @@ module forum::forum {
     // ── TIP ──────────────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════
 
-    /// Send a tip to another user for a specific post.
-    /// The entire coin is transferred to the recipient.
     public entry fun tip(
-        forum: &mut Forum,
+        registry: &UserRegistry,
         post_id: vector<u8>,
         payment: Coin<IOTA>,
         recipient: address,
@@ -490,13 +557,11 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
+        assert_active_user(registry, sender);
         assert!(sender != recipient, E_CANNOT_TIP_SELF);
         assert!(coin::value(&payment) > 0, E_ZERO_AMOUNT);
 
         let amount = coin::value(&payment);
-
-        // Transfer coin directly to recipient
         transfer::public_transfer(payment, recipient);
 
         event::emit(TipEvent {
@@ -512,9 +577,8 @@ module forum::forum {
     // ── SUBSCRIPTIONS ────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════
 
-    /// Admin: configure a subscription tier (add or update).
     public entry fun configure_tier(
-        forum: &mut Forum,
+        store: &mut SubscriptionStore,
         _cap: &AdminCap,
         tier_id: u8,
         price: u64,
@@ -522,34 +586,33 @@ module forum::forum {
         features: u64,
     ) {
         let tier = SubscriptionTier { price, duration_ms, features };
-        if (table::contains(&forum.subscription_tiers, tier_id)) {
-            let existing = table::borrow_mut(&mut forum.subscription_tiers, tier_id);
+        if (table::contains(&store.tiers, tier_id)) {
+            let existing = table::borrow_mut(&mut store.tiers, tier_id);
             *existing = tier;
         } else {
-            table::add(&mut forum.subscription_tiers, tier_id, tier);
+            table::add(&mut store.tiers, tier_id, tier);
         };
     }
 
-    /// Subscribe to a tier. Payment goes to forum treasury.
     public entry fun subscribe(
-        forum: &mut Forum,
+        registry: &UserRegistry,
+        store: &mut SubscriptionStore,
+        treasury: &mut Treasury,
         tier_id: u8,
         payment: Coin<IOTA>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
-        assert!(table::contains(&forum.subscription_tiers, tier_id), E_TIER_NOT_FOUND);
+        assert_active_user(registry, sender);
+        assert!(table::contains(&store.tiers, tier_id), E_TIER_NOT_FOUND);
 
-        let tier = *table::borrow(&forum.subscription_tiers, tier_id);
+        let tier = *table::borrow(&store.tiers, tier_id);
         assert!(coin::value(&payment) >= tier.price, E_INSUFFICIENT_PAYMENT);
 
-        // Take exact price, return change to sender
         let mut payment_balance = coin::into_balance(payment);
         let exact = balance::split(&mut payment_balance, tier.price);
-        balance::join(&mut forum.treasury, exact);
-        // Return overpayment
+        balance::join(&mut treasury.balance, exact);
         if (balance::value(&payment_balance) > 0) {
             transfer::public_transfer(coin::from_balance(payment_balance, ctx), sender);
         } else {
@@ -560,11 +623,11 @@ module forum::forum {
         let expires_at = now + tier.duration_ms;
 
         let sub = Subscription { tier: tier_id, expires_at };
-        if (table::contains(&forum.subscriptions, sender)) {
-            let existing = table::borrow_mut(&mut forum.subscriptions, sender);
+        if (table::contains(&store.user_subscriptions, sender)) {
+            let existing = table::borrow_mut(&mut store.user_subscriptions, sender);
             *existing = sub;
         } else {
-            table::add(&mut forum.subscriptions, sender, sub);
+            table::add(&mut store.user_subscriptions, sender, sub);
         };
 
         event::emit(SubscriptionEvent {
@@ -575,28 +638,28 @@ module forum::forum {
         });
     }
 
-    /// Renew an existing subscription. Extends from current expiry or now, whichever is later.
     public entry fun renew_subscription(
-        forum: &mut Forum,
+        registry: &UserRegistry,
+        store: &mut SubscriptionStore,
+        treasury: &mut Treasury,
         payment: Coin<IOTA>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
-        assert!(table::contains(&forum.subscriptions, sender), E_NO_SUBSCRIPTION);
+        assert_active_user(registry, sender);
+        assert!(table::contains(&store.user_subscriptions, sender), E_NO_SUBSCRIPTION);
 
-        let sub = *table::borrow(&forum.subscriptions, sender);
+        let sub = *table::borrow(&store.user_subscriptions, sender);
         let tier_id = sub.tier;
-        assert!(table::contains(&forum.subscription_tiers, tier_id), E_TIER_NOT_FOUND);
+        assert!(table::contains(&store.tiers, tier_id), E_TIER_NOT_FOUND);
 
-        let tier = *table::borrow(&forum.subscription_tiers, tier_id);
+        let tier = *table::borrow(&store.tiers, tier_id);
         assert!(coin::value(&payment) >= tier.price, E_INSUFFICIENT_PAYMENT);
 
-        // Take exact price, return change to sender
         let mut payment_balance = coin::into_balance(payment);
         let exact = balance::split(&mut payment_balance, tier.price);
-        balance::join(&mut forum.treasury, exact);
+        balance::join(&mut treasury.balance, exact);
         if (balance::value(&payment_balance) > 0) {
             transfer::public_transfer(coin::from_balance(payment_balance, ctx), sender);
         } else {
@@ -604,11 +667,10 @@ module forum::forum {
         };
 
         let now = clock.timestamp_ms();
-        // Extend from current expiry if still active, otherwise from now
         let base = if (sub.expires_at > now) { sub.expires_at } else { now };
         let new_expires = base + tier.duration_ms;
 
-        let existing = table::borrow_mut(&mut forum.subscriptions, sender);
+        let existing = table::borrow_mut(&mut store.user_subscriptions, sender);
         existing.expires_at = new_expires;
 
         event::emit(SubscriptionEvent {
@@ -620,12 +682,13 @@ module forum::forum {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // ── MARKETPLACE ──────────────────────────────────────────────────
+    // ── MARKETPLACE ──────────────────────────────────════════════════
     // ══════════════════════════════════════════════════════════════════
 
-    /// Create paid content. Registers it in the paid_contents table and emits a ForumEvent.
     public entry fun create_paid_content(
         forum: &mut Forum,
+        registry: &UserRegistry,
+        marketplace: &mut MarketplaceStore,
         content_id: vector<u8>,
         price: u64,
         tag: vector<u8>,
@@ -636,13 +699,13 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
+        assert_active_user(registry, sender);
         assert!(price > 0, E_ZERO_AMOUNT);
 
         let content_id_str = string::utf8(content_id);
-        assert!(!table::contains(&forum.paid_contents, content_id_str), E_CONTENT_ALREADY_EXISTS);
+        assert!(!table::contains(&marketplace.paid_contents, content_id_str), E_CONTENT_ALREADY_EXISTS);
 
-        table::add(&mut forum.paid_contents, content_id_str, PaidContent {
+        table::add(&mut marketplace.paid_contents, content_id_str, PaidContent {
             author: sender,
             price,
             buyers: table::new(ctx),
@@ -660,21 +723,22 @@ module forum::forum {
         });
     }
 
-    /// Purchase paid content. 95% goes to author, 5% to forum treasury.
     public entry fun purchase_content(
-        forum: &mut Forum,
+        registry: &UserRegistry,
+        marketplace: &mut MarketplaceStore,
+        treasury: &mut Treasury,
         content_id: vector<u8>,
         payment: Coin<IOTA>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
+        assert_active_user(registry, sender);
 
         let content_id_str = string::utf8(content_id);
-        assert!(table::contains(&forum.paid_contents, content_id_str), E_CONTENT_NOT_FOUND);
+        assert!(table::contains(&marketplace.paid_contents, content_id_str), E_CONTENT_NOT_FOUND);
 
-        let content = table::borrow_mut(&mut forum.paid_contents, content_id_str);
+        let content = table::borrow_mut(&mut marketplace.paid_contents, content_id_str);
         assert!(sender != content.author, E_OWN_CONTENT);
         assert!(!table::contains(&content.buyers, sender), E_ALREADY_PURCHASED);
         assert!(coin::value(&payment) >= content.price, E_INSUFFICIENT_PAYMENT);
@@ -682,16 +746,13 @@ module forum::forum {
         let author = content.author;
         let price = content.price;
 
-        // Mark as purchased
         table::add(&mut content.buyers, sender, true);
 
-        // Split payment: 5% fee to treasury, 95% to author
         let mut payment_balance = coin::into_balance(payment);
         let fee_amount = price / MARKETPLACE_FEE_DIVISOR;
         let fee_balance = balance::split(&mut payment_balance, fee_amount);
-        balance::join(&mut forum.treasury, fee_balance);
+        balance::join(&mut treasury.balance, fee_balance);
 
-        // Remaining goes to author
         let author_coin = coin::from_balance(payment_balance, ctx);
         transfer::public_transfer(author_coin, author);
 
@@ -706,55 +767,52 @@ module forum::forum {
         });
     }
 
-    /// Admin: configure a badge (add or update).
     public entry fun configure_badge(
-        forum: &mut Forum,
+        marketplace: &mut MarketplaceStore,
         _cap: &AdminCap,
         badge_id: u8,
         name: vector<u8>,
         price: u64,
     ) {
         let badge = Badge { name: string::utf8(name), price };
-        if (table::contains(&forum.badges, badge_id)) {
-            let existing = table::borrow_mut(&mut forum.badges, badge_id);
+        if (table::contains(&marketplace.badges, badge_id)) {
+            let existing = table::borrow_mut(&mut marketplace.badges, badge_id);
             *existing = badge;
         } else {
-            table::add(&mut forum.badges, badge_id, badge);
+            table::add(&mut marketplace.badges, badge_id, badge);
         };
     }
 
-    /// Purchase a badge. Payment goes to forum treasury.
     public entry fun purchase_badge(
-        forum: &mut Forum,
+        registry: &UserRegistry,
+        marketplace: &mut MarketplaceStore,
+        treasury: &mut Treasury,
         badge_id: u8,
         payment: Coin<IOTA>,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
         let sender = ctx.sender();
-        assert_active_user(forum, sender);
-        assert!(table::contains(&forum.badges, badge_id), E_BADGE_NOT_FOUND);
+        assert_active_user(registry, sender);
+        assert!(table::contains(&marketplace.badges, badge_id), E_BADGE_NOT_FOUND);
 
-        let badge = *table::borrow(&forum.badges, badge_id);
+        let badge = *table::borrow(&marketplace.badges, badge_id);
         assert!(coin::value(&payment) >= badge.price, E_INSUFFICIENT_PAYMENT);
 
-        // Take exact price, return change to sender
         let mut payment_balance = coin::into_balance(payment);
         let exact = balance::split(&mut payment_balance, badge.price);
-        balance::join(&mut forum.treasury, exact);
+        balance::join(&mut treasury.balance, exact);
         if (balance::value(&payment_balance) > 0) {
             transfer::public_transfer(coin::from_balance(payment_balance, ctx), sender);
         } else {
             balance::destroy_zero(payment_balance);
         };
 
-        // Add badge to user's collection
-        if (!table::contains(&forum.user_badges, sender)) {
-            table::add(&mut forum.user_badges, sender, vector::empty<u8>());
+        if (!table::contains(&marketplace.user_badges, sender)) {
+            table::add(&mut marketplace.user_badges, sender, vector::empty<u8>());
         };
-        let user_badges = table::borrow_mut(&mut forum.user_badges, sender);
+        let user_badges = table::borrow_mut(&mut marketplace.user_badges, sender);
 
-        // Check user doesn't already have this badge
         let len = user_badges.length();
         let mut i = 0;
         let mut already_has = false;
@@ -780,10 +838,8 @@ module forum::forum {
     // ── ESCROW ───────────────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════
 
-    /// Create an escrow. Buyer sends funds which are locked in the Escrow object.
-    /// All 3 parties (buyer, seller, arbitrator) must be registered.
     public entry fun create_escrow(
-        forum: &Forum,
+        registry: &UserRegistry,
         seller: address,
         arbitrator: address,
         description: vector<u8>,
@@ -793,9 +849,9 @@ module forum::forum {
         ctx: &mut TxContext,
     ) {
         let buyer = ctx.sender();
-        assert_active_user(forum, buyer);
-        assert!(table::contains(&forum.users, seller), E_TARGET_NOT_REGISTERED);
-        assert!(table::contains(&forum.users, arbitrator), E_TARGET_NOT_REGISTERED);
+        assert_active_user(registry, buyer);
+        assert!(table::contains(&registry.users, seller), E_TARGET_NOT_REGISTERED);
+        assert!(table::contains(&registry.users, arbitrator), E_TARGET_NOT_REGISTERED);
         assert!(buyer != seller, E_CANNOT_BE_OWN_SELLER);
         assert!(buyer != arbitrator, E_CANNOT_BE_OWN_ARBITRATOR);
         assert!(seller != arbitrator, E_SELLER_CANNOT_BE_ARBITRATOR);
@@ -816,6 +872,7 @@ module forum::forum {
             status: ESCROW_CREATED,
             release_votes: vector::empty(),
             refund_votes: vector::empty(),
+            rated_by: vector::empty(),
             balance: escrow_balance,
         };
 
@@ -834,7 +891,6 @@ module forum::forum {
         transfer::share_object(escrow);
     }
 
-    /// Seller marks the escrow as delivered.
     public entry fun mark_delivered(
         escrow: &mut Escrow,
         clock: &Clock,
@@ -855,7 +911,6 @@ module forum::forum {
         });
     }
 
-    /// Buyer opens a dispute on the escrow.
     public entry fun open_dispute(
         escrow: &mut Escrow,
         clock: &Clock,
@@ -879,11 +934,10 @@ module forum::forum {
         });
     }
 
-    /// Vote to release funds to seller. Requires 2 of 3 parties.
-    /// When resolved: seller gets (amount - fee), fee goes to forum treasury.
     public entry fun vote_release(
         escrow: &mut Escrow,
-        forum: &mut Forum,
+        marketplace: &mut MarketplaceStore,
+        treasury: &mut Treasury,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -891,7 +945,6 @@ module forum::forum {
         assert_escrow_party(escrow, sender);
         assert!(escrow.status != ESCROW_RESOLVED, E_ESCROW_WRONG_STATUS);
         assert!(!has_voted(&escrow.release_votes, sender), E_ALREADY_VOTED);
-        // Prevent double-voting: cannot vote release if already voted refund
         assert!(!has_voted(&escrow.refund_votes, sender), E_ALREADY_VOTED);
 
         escrow.release_votes.push_back(sender);
@@ -903,30 +956,26 @@ module forum::forum {
             timestamp: clock.timestamp_ms(),
         });
 
-        // Check if we have enough votes
         if (escrow.release_votes.length() >= VOTES_REQUIRED) {
             escrow.status = ESCROW_RESOLVED;
 
-            // Calculate fee and transfer
             let total = balance::value(&escrow.balance);
             let fee_amount = total / ESCROW_FEE_DIVISOR;
             let fee_balance = balance::split(&mut escrow.balance, fee_amount);
-            balance::join(&mut forum.treasury, fee_balance);
+            balance::join(&mut treasury.balance, fee_balance);
 
-            // Remaining to seller
             let seller_balance = balance::withdraw_all(&mut escrow.balance);
             let seller_coin = coin::from_balance(seller_balance, ctx);
             transfer::public_transfer(seller_coin, escrow.seller);
 
-            // Update reputations
-            ensure_reputation(forum, escrow.buyer);
-            ensure_reputation(forum, escrow.seller);
-            let buyer_rep = table::borrow_mut(&mut forum.reputations, escrow.buyer);
+            ensure_reputation(marketplace, escrow.buyer);
+            ensure_reputation(marketplace, escrow.seller);
+            let buyer_rep = table::borrow_mut(&mut marketplace.reputations, escrow.buyer);
             buyer_rep.total_trades = buyer_rep.total_trades + 1;
             buyer_rep.successful = buyer_rep.successful + 1;
             buyer_rep.total_volume = buyer_rep.total_volume + escrow.amount;
 
-            let seller_rep = table::borrow_mut(&mut forum.reputations, escrow.seller);
+            let seller_rep = table::borrow_mut(&mut marketplace.reputations, escrow.seller);
             seller_rep.total_trades = seller_rep.total_trades + 1;
             seller_rep.successful = seller_rep.successful + 1;
             seller_rep.total_volume = seller_rep.total_volume + escrow.amount;
@@ -940,11 +989,10 @@ module forum::forum {
         };
     }
 
-    /// Vote to refund funds to buyer. Requires 2 of 3 parties.
-    /// When resolved: buyer gets (amount - fee), fee goes to forum treasury.
     public entry fun vote_refund(
         escrow: &mut Escrow,
-        forum: &mut Forum,
+        marketplace: &mut MarketplaceStore,
+        treasury: &mut Treasury,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -952,7 +1000,6 @@ module forum::forum {
         assert_escrow_party(escrow, sender);
         assert!(escrow.status != ESCROW_RESOLVED, E_ESCROW_WRONG_STATUS);
         assert!(!has_voted(&escrow.refund_votes, sender), E_ALREADY_VOTED);
-        // Prevent double-voting: cannot vote refund if already voted release
         assert!(!has_voted(&escrow.release_votes, sender), E_ALREADY_VOTED);
 
         escrow.refund_votes.push_back(sender);
@@ -964,30 +1011,26 @@ module forum::forum {
             timestamp: clock.timestamp_ms(),
         });
 
-        // Check if we have enough votes
         if (escrow.refund_votes.length() >= VOTES_REQUIRED) {
             escrow.status = ESCROW_RESOLVED;
 
-            // Calculate fee and transfer
             let total = balance::value(&escrow.balance);
             let fee_amount = total / ESCROW_FEE_DIVISOR;
             let fee_balance = balance::split(&mut escrow.balance, fee_amount);
-            balance::join(&mut forum.treasury, fee_balance);
+            balance::join(&mut treasury.balance, fee_balance);
 
-            // Remaining to buyer
             let buyer_balance = balance::withdraw_all(&mut escrow.balance);
             let buyer_coin = coin::from_balance(buyer_balance, ctx);
             transfer::public_transfer(buyer_coin, escrow.buyer);
 
-            // Update reputations — this was a dispute
-            ensure_reputation(forum, escrow.buyer);
-            ensure_reputation(forum, escrow.seller);
-            let buyer_rep = table::borrow_mut(&mut forum.reputations, escrow.buyer);
+            ensure_reputation(marketplace, escrow.buyer);
+            ensure_reputation(marketplace, escrow.seller);
+            let buyer_rep = table::borrow_mut(&mut marketplace.reputations, escrow.buyer);
             buyer_rep.total_trades = buyer_rep.total_trades + 1;
             buyer_rep.disputes_won = buyer_rep.disputes_won + 1;
             buyer_rep.total_volume = buyer_rep.total_volume + escrow.amount;
 
-            let seller_rep = table::borrow_mut(&mut forum.reputations, escrow.seller);
+            let seller_rep = table::borrow_mut(&mut marketplace.reputations, escrow.seller);
             seller_rep.total_trades = seller_rep.total_trades + 1;
             seller_rep.disputes_lost = seller_rep.disputes_lost + 1;
             seller_rep.total_volume = seller_rep.total_volume + escrow.amount;
@@ -1001,11 +1044,9 @@ module forum::forum {
         };
     }
 
-    /// Rate a trade after escrow is resolved. Only buyer or seller can rate.
-    /// Score must be 1-5.
     public entry fun rate_trade(
-        forum: &mut Forum,
-        escrow: &Escrow,
+        escrow: &mut Escrow,
+        marketplace: &mut MarketplaceStore,
         rated: address,
         score: u8,
         comment: vector<u8>,
@@ -1024,10 +1065,11 @@ module forum::forum {
             E_NOT_ESCROW_PARTY,
         );
         assert!(score >= 1 && score <= 5, E_INVALID_RATING);
+        assert!(!has_voted(&escrow.rated_by, sender), E_ALREADY_RATED);
+        escrow.rated_by.push_back(sender);
 
-        // Update rated user's reputation
-        ensure_reputation(forum, rated);
-        let rep = table::borrow_mut(&mut forum.reputations, rated);
+        ensure_reputation(marketplace, rated);
+        let rep = table::borrow_mut(&mut marketplace.reputations, rated);
         rep.rating_sum = rep.rating_sum + (score as u64);
         rep.rating_count = rep.rating_count + 1;
 
@@ -1041,21 +1083,360 @@ module forum::forum {
         });
     }
 
+    public entry fun claim_expired(
+        escrow: &mut Escrow,
+        marketplace: &mut MarketplaceStore,
+        treasury: &mut Treasury,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert!(sender == escrow.buyer, E_ONLY_BUYER);
+        assert!(clock.timestamp_ms() > escrow.deadline, E_NOT_EXPIRED);
+        assert!(escrow.status != ESCROW_RESOLVED, E_ALREADY_RESOLVED);
+
+        escrow.status = ESCROW_RESOLVED;
+
+        let total = balance::value(&escrow.balance);
+        let fee_amount = total / ESCROW_FEE_DIVISOR;
+        let fee_balance = balance::split(&mut escrow.balance, fee_amount);
+        balance::join(&mut treasury.balance, fee_balance);
+
+        let buyer_balance = balance::withdraw_all(&mut escrow.balance);
+        let buyer_coin = coin::from_balance(buyer_balance, ctx);
+        transfer::public_transfer(buyer_coin, escrow.buyer);
+
+        ensure_reputation(marketplace, escrow.buyer);
+        ensure_reputation(marketplace, escrow.seller);
+        let buyer_rep = table::borrow_mut(&mut marketplace.reputations, escrow.buyer);
+        buyer_rep.total_trades = buyer_rep.total_trades + 1;
+        buyer_rep.total_volume = buyer_rep.total_volume + escrow.amount;
+
+        let seller_rep = table::borrow_mut(&mut marketplace.reputations, escrow.seller);
+        seller_rep.total_trades = seller_rep.total_trades + 1;
+        seller_rep.disputes_lost = seller_rep.disputes_lost + 1;
+        seller_rep.total_volume = seller_rep.total_volume + escrow.amount;
+
+        event::emit(EscrowUpdated {
+            escrow_id: object::id(escrow),
+            action: string::utf8(b"expired_refund"),
+            actor: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ── SOCIAL GRAPH: FOLLOW / UNFOLLOW ──────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+
+    public entry fun follow(
+        registry: &mut UserRegistry,
+        target: address,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+        assert!(table::contains(&registry.users, target), E_TARGET_NOT_REGISTERED);
+        assert!(sender != target, E_CANNOT_FOLLOW_SELF);
+
+        if (!table::contains(&registry.follows, sender)) {
+            table::add(&mut registry.follows, sender, vector::empty<address>());
+        };
+        let following = table::borrow_mut(&mut registry.follows, sender);
+
+        // Check not already following
+        let len = following.length();
+        let mut i = 0;
+        while (i < len) {
+            assert!(*following.borrow(i) != target, E_ALREADY_FOLLOWING);
+            i = i + 1;
+        };
+
+        following.push_back(target);
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_FOLLOW"),
+            entity_id: string::utf8(b""),
+            data: vector::empty(),
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    public entry fun unfollow(
+        registry: &mut UserRegistry,
+        target: address,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+        assert!(table::contains(&registry.follows, sender), E_NOT_FOLLOWING);
+
+        let following = table::borrow_mut(&mut registry.follows, sender);
+        let len = following.length();
+        let mut i = 0;
+        let mut found = false;
+        while (i < len) {
+            if (*following.borrow(i) == target) {
+                following.swap_remove(i);
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+        assert!(found, E_NOT_FOLLOWING);
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_UNFOLLOW"),
+            entity_id: string::utf8(b""),
+            data: vector::empty(),
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ── GOVERNANCE: POLLS ────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+
+    public entry fun create_poll(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        poll_id: vector<u8>,
+        options_count: u8,
+        deadline: u64,
+        data: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+        assert!(deadline > clock.timestamp_ms(), E_DEADLINE_IN_PAST);
+        assert!(options_count >= 2, E_INVALID_OPTION);
+
+        let poll_id_str = string::utf8(poll_id);
+        assert!(!table::contains(&governance.polls, poll_id_str), E_POLL_ALREADY_EXISTS);
+
+        table::add(&mut governance.polls, poll_id_str, Poll {
+            creator: sender,
+            options_count,
+            votes: table::new(ctx),
+            deadline,
+            closed: false,
+        });
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_POLL"),
+            entity_id: poll_id_str,
+            data,
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    public entry fun vote_poll(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        poll_id: vector<u8>,
+        option: u8,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+
+        let poll_id_str = string::utf8(poll_id);
+        assert!(table::contains(&governance.polls, poll_id_str), E_POLL_NOT_FOUND);
+
+        let poll = table::borrow_mut(&mut governance.polls, poll_id_str);
+        assert!(!poll.closed, E_POLL_CLOSED);
+        assert!(clock.timestamp_ms() <= poll.deadline, E_POLL_EXPIRED);
+        assert!(option < poll.options_count, E_INVALID_OPTION);
+        assert!(!table::contains(&poll.votes, sender), E_POLL_ALREADY_VOTED);
+
+        table::add(&mut poll.votes, sender, option);
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_POLL_VOTE"),
+            entity_id: poll_id_str,
+            data: vector::empty(),
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    public entry fun close_poll(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        poll_id: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        let poll_id_str = string::utf8(poll_id);
+        assert!(table::contains(&governance.polls, poll_id_str), E_POLL_NOT_FOUND);
+
+        let poll = table::borrow_mut(&mut governance.polls, poll_id_str);
+        assert!(!poll.closed, E_POLL_CLOSED);
+
+        // Only creator or admin can close
+        let is_creator = sender == poll.creator;
+        let is_admin = table::contains(&registry.users, sender) &&
+            *table::borrow(&registry.users, sender) >= ROLE_ADMIN;
+        assert!(is_creator || is_admin, E_NOT_POLL_CREATOR_OR_ADMIN);
+
+        poll.closed = true;
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_POLL"),
+            entity_id: poll_id_str,
+            data: vector::empty(),
+            version: 2,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // ── GOVERNANCE: PROPOSALS ────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════
+
+    public entry fun create_proposal(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        proposal_id: vector<u8>,
+        quorum: u64,
+        deadline: u64,
+        data: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+        assert!(deadline > clock.timestamp_ms(), E_DEADLINE_IN_PAST);
+        assert!(quorum > 0, E_ZERO_AMOUNT);
+
+        let proposal_id_str = string::utf8(proposal_id);
+        assert!(!table::contains(&governance.proposals, proposal_id_str), E_PROPOSAL_ALREADY_EXISTS);
+
+        table::add(&mut governance.proposals, proposal_id_str, Proposal {
+            creator: sender,
+            quorum,
+            yes_votes: vector::empty(),
+            no_votes: vector::empty(),
+            deadline,
+            status: PROPOSAL_ACTIVE,
+        });
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_PROPOSAL"),
+            entity_id: proposal_id_str,
+            data,
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    public entry fun vote_proposal(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        proposal_id: vector<u8>,
+        vote_yes: bool,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        assert_active_user(registry, sender);
+
+        let proposal_id_str = string::utf8(proposal_id);
+        assert!(table::contains(&governance.proposals, proposal_id_str), E_PROPOSAL_NOT_FOUND);
+
+        let proposal = table::borrow_mut(&mut governance.proposals, proposal_id_str);
+        assert!(proposal.status == PROPOSAL_ACTIVE, E_PROPOSAL_CLOSED);
+        assert!(clock.timestamp_ms() <= proposal.deadline, E_PROPOSAL_EXPIRED);
+        assert!(!has_voted(&proposal.yes_votes, sender), E_PROPOSAL_ALREADY_VOTED);
+        assert!(!has_voted(&proposal.no_votes, sender), E_PROPOSAL_ALREADY_VOTED);
+
+        if (vote_yes) {
+            proposal.yes_votes.push_back(sender);
+        } else {
+            proposal.no_votes.push_back(sender);
+        };
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_PROPOSAL_VOTE"),
+            entity_id: proposal_id_str,
+            data: vector::empty(),
+            version: 1,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
+    public entry fun close_proposal(
+        governance: &mut GovernanceStore,
+        registry: &UserRegistry,
+        proposal_id: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let sender = ctx.sender();
+        let proposal_id_str = string::utf8(proposal_id);
+        assert!(table::contains(&governance.proposals, proposal_id_str), E_PROPOSAL_NOT_FOUND);
+
+        let proposal = table::borrow_mut(&mut governance.proposals, proposal_id_str);
+        assert!(proposal.status == PROPOSAL_ACTIVE, E_PROPOSAL_CLOSED);
+
+        // Only creator or admin can close
+        let is_creator = sender == proposal.creator;
+        let is_admin = table::contains(&registry.users, sender) &&
+            *table::borrow(&registry.users, sender) >= ROLE_ADMIN;
+        assert!(is_creator || is_admin, E_NOT_PROPOSAL_CREATOR_OR_ADMIN);
+
+        let total_votes = proposal.yes_votes.length() + proposal.no_votes.length();
+        if (total_votes >= proposal.quorum && proposal.yes_votes.length() > proposal.no_votes.length()) {
+            proposal.status = PROPOSAL_PASSED;
+        } else if (clock.timestamp_ms() > proposal.deadline) {
+            if (total_votes >= proposal.quorum && proposal.yes_votes.length() > proposal.no_votes.length()) {
+                proposal.status = PROPOSAL_PASSED;
+            } else {
+                proposal.status = PROPOSAL_EXPIRED;
+            };
+        } else {
+            proposal.status = PROPOSAL_REJECTED;
+        };
+
+        event::emit(ForumEvent {
+            tag: string::utf8(b"FORUM_PROPOSAL"),
+            entity_id: proposal_id_str,
+            data: vector::empty(),
+            version: 2,
+            author: sender,
+            timestamp: clock.timestamp_ms(),
+        });
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // ── ADMIN: TREASURY ──────────────────────────────────────────────
     // ══════════════════════════════════════════════════════════════════
 
-    /// Admin: withdraw funds from the forum treasury.
     public entry fun withdraw_funds(
-        forum: &mut Forum,
+        treasury: &mut Treasury,
         _cap: &AdminCap,
         amount: u64,
         ctx: &mut TxContext,
     ) {
         assert!(amount > 0, E_ZERO_AMOUNT);
-        assert!(balance::value(&forum.treasury) >= amount, E_INSUFFICIENT_TREASURY);
+        assert!(balance::value(&treasury.balance) >= amount, E_INSUFFICIENT_TREASURY);
 
-        let withdrawn = balance::split(&mut forum.treasury, amount);
+        let withdrawn = balance::split(&mut treasury.balance, amount);
         let coin = coin::from_balance(withdrawn, ctx);
         transfer::public_transfer(coin, ctx.sender());
     }
@@ -1063,23 +1444,23 @@ module forum::forum {
     // ── View functions ──────────────────────────────────────────────
 
     public fun event_count(forum: &Forum): u64 { forum.event_count }
-    public fun user_count(forum: &Forum): u64 { forum.user_count }
+    public fun user_count(registry: &UserRegistry): u64 { registry.user_count }
     public fun admin(forum: &Forum): address { forum.admin }
 
-    public fun is_registered(forum: &Forum, user: address): bool {
-        table::contains(&forum.users, user)
+    public fun is_registered(registry: &UserRegistry, user: address): bool {
+        table::contains(&registry.users, user)
     }
 
-    public fun user_role(forum: &Forum, user: address): u8 {
-        get_role(forum, user)
+    public fun user_role(registry: &UserRegistry, user: address): u8 {
+        get_role(registry, user)
     }
 
-    public fun treasury_balance(forum: &Forum): u64 {
-        balance::value(&forum.treasury)
+    public fun treasury_balance(treasury: &Treasury): u64 {
+        balance::value(&treasury.balance)
     }
 
-    public fun has_subscription(forum: &Forum, user: address): bool {
-        table::contains(&forum.subscriptions, user)
+    public fun has_subscription(store: &SubscriptionStore, user: address): bool {
+        table::contains(&store.user_subscriptions, user)
     }
 
     public fun escrow_status(escrow: &Escrow): u8 {
@@ -1088,5 +1469,12 @@ module forum::forum {
 
     public fun escrow_amount(escrow: &Escrow): u64 {
         escrow.amount
+    }
+
+    // ── Test-only helpers ──────────────────────────────────────────
+
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx);
     }
 }

@@ -6,6 +6,7 @@ import MarkdownRender from './MarkdownRender';
 import RichEditor from './RichEditor';
 import VoteButtons from './VoteButtons';
 import TipButton from './TipButton';
+import ReactionBar from './ReactionBar';
 import BlockchainInfo from './BlockchainInfo';
 import { useTranslation } from 'react-i18next';
 
@@ -44,6 +45,7 @@ export default function PostCard({
   onCancelReply,
   isFresh,
   layout = 'cards',
+  onReact,
 }) {
   const { t } = useTranslation();
   const [replyContent, setReplyContent] = useState('');
@@ -165,6 +167,12 @@ export default function PostCard({
     </div>
   );
 
+  const reactionBar = (
+    <div className="mt-2">
+      <ReactionBar postId={post.id} onReact={onReact} />
+    </div>
+  );
+
   /* ═════════════════════════════════════════════════════════════════
      INVISION / FORUM LAYOUT — avatar sidebar + content area
      ═════════════════════════════════════════════════════════════════ */
@@ -237,6 +245,9 @@ export default function PostCard({
               </div>
             )}
 
+            {/* Reactions */}
+            {reactionBar}
+
             {/* Actions */}
             <div className="pt-3 mt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -291,6 +302,7 @@ export default function PostCard({
             )}
           </div>
           {editing ? editForm : <div className="mb-3"><MarkdownRender content={post.content || ''} /></div>}
+          {reactionBar}
           {actionButtons}
           {replyForm}
         </div>

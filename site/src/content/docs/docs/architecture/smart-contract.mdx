@@ -1,35 +1,42 @@
 ---
 title: Smart Contract
-description: The Move smart contract powering IotaPolis.
+description: The Move smart contract powering IotaPolis — 6 shared objects for parallel execution.
 ---
 
 The smart contract lives in `move/forum/sources/forum.move` and is the core of the system. All state changes happen on-chain.
 
-## Objects
+## 6 Shared Objects
+
+The contract has been refactored from a single monolithic Forum object into 6 parallel shared objects, enabling concurrent transaction execution on IOTA:
 
 | Object | Type | Description |
 |--------|------|-------------|
-| **Forum** | Shared | Central registry: users with roles, subscriptions, badges, reputation, treasury |
+| **Forum** | Shared | Forum data, categories, global configuration |
+| **UserRegistry** | Shared | User profiles, roles, follow/unfollow relationships |
+| **Treasury** | Shared | Fund management, fee collection, admin withdrawals |
+| **SubscriptionStore** | Shared | Subscription tiers, user subscription status and renewals |
+| **MarketplaceStore** | Shared | Paid content listings, purchasable badges |
+| **GovernanceStore** | Shared | Polls with options/votes, governance proposals with quorum and deadline |
 | **AdminCap** | Owned | Capability object held by the deployer, required for admin operations |
-| **Escrow** | Shared | Individual escrow instances for 2-of-3 multi-sig trades |
+| **Escrow** | Shared (per-trade) | Individual escrow instances for 2-of-3 multi-sig trades |
 
 ## Roles
 
-Roles are stored on-chain per user in the Forum object:
+Roles are stored on-chain per user in the UserRegistry object:
 
 | Value | Role | Permissions |
 |-------|------|-------------|
 | 0 | BANNED | Cannot interact |
-| 1 | USER | Post, vote, tip, subscribe, purchase, escrow |
+| 1 | USER | Post, vote, tip, subscribe, purchase, escrow, follow, react, poll, DM |
 | 2 | MODERATOR | All USER permissions + create categories, moderate content |
-| 3 | ADMIN | All permissions + set roles, configure forum |
+| 3 | ADMIN | All permissions + set roles, configure forum, withdraw treasury |
 
 ## Entry Functions
 
 | Function | Min. Role | Description |
 |----------|-----------|-------------|
-| `register` | None | Register a new user in the Forum |
-| `post_event` | USER | Post a thread, reply, or vote |
+| `register` | None | Register a new user in the UserRegistry |
+| `post_event` | USER | Post a thread, reply, vote, reaction, DM, follow/unfollow, poll vote |
 | `mod_post_event` | MODERATOR | Create category, moderate content |
 | `admin_post_event` | ADMIN | Set config, manage roles |
 | `set_user_role` | ADMIN | Change a user's role |
@@ -45,8 +52,15 @@ Roles are stored on-chain per user in the Forum object:
 | `open_dispute` | USER | Open a dispute on an escrow |
 | `vote_release` | USER | Vote to release escrow funds to seller |
 | `vote_refund` | USER | Vote to refund escrow funds to buyer |
-| `rate_trade` | USER | Rate a completed trade |
+| `rate_trade` | USER | Rate a completed trade (anti-double-rating enforced) |
+| `claim_expired` | USER | Claim funds from expired escrow |
 | `withdraw_funds` | ADMIN | Withdraw treasury funds |
+| `follow` | USER | Follow another user on-chain |
+| `unfollow` | USER | Unfollow a user on-chain |
+| `create_poll` | USER | Create a poll with multiple options and deadline |
+| `vote_poll` | USER | Vote on a poll option |
+| `create_proposal` | USER | Create a governance proposal with quorum |
+| `vote_proposal` | USER | Vote yes/no on a governance proposal |
 
 ## Events
 
@@ -60,8 +74,29 @@ The contract emits typed events that the backend indexes:
 | `PurchaseEvent` | Content purchased |
 | `BadgeEvent` | Badge purchased |
 | `EscrowCreated` | New escrow created |
-| `EscrowUpdated` | Escrow state changed (delivered, disputed, released, refunded) |
+| `EscrowUpdated` | Escrow state changed (delivered, disputed, released, refunded, expired) |
 | `RatingEvent` | Trade rated after completion |
+
+### Event Tags (in ForumEvent data)
+
+| Tag | Description |
+|-----|-------------|
+| `FORUM_USER` | User registration |
+| `FORUM_THREAD` | Thread created/edited |
+| `FORUM_POST` | Post created/edited |
+| `FORUM_VOTE` | Vote cast |
+| `FORUM_CATEGORY` | Category created/edited |
+| `FORUM_MODERATION` | Moderation action |
+| `FORUM_ROLE` | Role change |
+| `FORUM_CONFIG` | Forum configuration |
+| `FORUM_DM` | Direct message sent |
+| `FORUM_FOLLOW` | User followed |
+| `FORUM_UNFOLLOW` | User unfollowed |
+| `FORUM_POLL` | Poll created |
+| `FORUM_POLL_VOTE` | Poll vote cast |
+| `FORUM_PROPOSAL` | Governance proposal created |
+| `FORUM_PROPOSAL_VOTE` | Proposal vote cast |
+| `FORUM_REACTION` | Emoji reaction on a post |
 
 ## Data Encoding
 
@@ -75,7 +110,7 @@ This minimizes on-chain storage costs while keeping data structured and recovera
 
 ## Treasury and Fees
 
-The Forum object holds a treasury that collects fees:
+The Treasury object holds collected fees:
 
 | Fee Type | Rate |
 |----------|------|
@@ -83,3 +118,7 @@ The Forum object holds a treasury that collects fees:
 | Escrow trades | 2% |
 
 Overpayments are automatically refunded to the sender by the contract.
+
+## Testing
+
+The smart contract includes **25 Move tests** covering all entry functions, role enforcement, payment flows, escrow lifecycle, governance operations, and edge cases.

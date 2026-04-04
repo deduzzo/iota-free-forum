@@ -185,3 +185,62 @@ Utente A (admin)                     Utente B (user)
 
 Ogni utente paga il proprio gas. Su testnet e gratis (faucet automatico).
 I permessi sono verificati dai validatori IOTA — nessun client o server puo bypassarli.
+
+## Mainnet Deployment
+
+### Prerequisiti
+
+- IOTA 2.0 Rebased mainnet attiva e raggiungibile
+- Token IOTA mainnet per il gas (acquistabili su exchange o tramite bridge)
+- Smart contract testato e auditato (vedi Mainnet Preparation Checklist in CLAUDE.md)
+
+### Steps
+
+1. **Aggiorna la configurazione network** in `config/private_iota_conf.js`:
+
+```javascript
+IOTA_NETWORK: 'mainnet',
+IOTA_MNEMONIC: null,       // Verra generato al primo avvio
+FORUM_PACKAGE_ID: null,
+FORUM_OBJECT_ID: null,
+ADMIN_CAP_ID: null,
+```
+
+2. **Genera un nuovo wallet mainnet**:
+
+```bash
+npm run dev    # Genera wallet mainnet automaticamente
+# CTRL+C dopo "Sails lifted"
+```
+
+3. **Fondi il wallet admin** con IOTA mainnet tokens:
+   - Copia l'indirizzo dal log di avvio o da `config/private_iota_conf.js`
+   - Invia IOTA tokens da un exchange o wallet esterno
+   - Servono almeno 1 IOTA per il deploy del contratto
+
+4. **Deploy dello smart contract su mainnet**:
+
+```bash
+npm run move:deploy
+```
+
+5. **Aggiorna la connection string** e condividila con gli utenti:
+
+```
+mainnet:0xPACKAGE_ID:0xFORUM_OBJECT_ID:0xREGISTRY_ID:0xTREASURY_ID:...
+```
+
+6. **Avvia in produzione**:
+
+```bash
+npm run build
+npm start
+```
+
+### Note importanti
+
+- **I dati testnet NON vengono migrati automaticamente.** Il deploy su mainnet crea un forum vuoto. Se necessario, usa un tool di migrazione per esportare dati testnet e reimportarli (vedi checklist).
+- **Il faucet non funziona su mainnet.** Gli utenti devono procurarsi IOTA tokens autonomamente, oppure il forum deve implementare sponsored transactions.
+- **Backup del mnemonic admin:** se perdi il mnemonic in `private_iota_conf.js`, perdi il controllo admin del forum. Conservalo in un luogo sicuro.
+- **AdminCap:** si raccomanda di trasferire l'AdminCap a un multi-sig wallet per maggiore sicurezza in produzione.
+- **Gas fees:** ogni azione on-chain costa gas. Stima circa 0.01-0.05 IOTA per operazione (post, vote, tip).

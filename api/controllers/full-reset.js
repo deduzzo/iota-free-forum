@@ -22,14 +22,15 @@ module.exports = {
   description: 'Generate new wallet + clear all data. Forum restarts from scratch. Requires admin.',
 
   inputs: {
-    adminAddress: { type: 'string', description: 'IOTA address of the admin requesting the reset' },
-    timestamp: { type: 'number', description: 'Current timestamp for freshness check' },
-    signature: { type: 'string', description: 'Ed25519 signature of the request payload' },
+    adminAddress: { type: 'string', required: true, description: 'IOTA address of the admin requesting the reset' },
+    timestamp: { type: 'number', required: true, description: 'Current timestamp for freshness check' },
+    signature: { type: 'string', required: true, description: 'Ed25519 signature of the request payload' },
   },
 
   exits: {
     success: { statusCode: 200 },
     forbidden: { statusCode: 403 },
+    unauthorized: { statusCode: 401 },
     badRequest: { statusCode: 400 },
   },
 
@@ -39,16 +40,46 @@ module.exports = {
       const Users = db.getModel('users');
       const userCount = Users.count();
 
-      if (userCount > 0 && inputs.adminAddress) {
+      if (userCount > 0) {
         const admin = Users.findOne({ id: inputs.adminAddress });
         if (!admin || admin.role !== 'admin') {
           this.res.status(403);
           return { success: false, error: 'Access denied. Only admin can perform full reset.' };
         }
-        console.log('[full-reset] Starting full reset (authorized by admin:', admin.username, ')...');
-      } else if (userCount > 0) {
-        this.res.status(403);
-        return { success: false, error: 'Admin address required when forum has users.' };
+        // 2. Verify timestamp freshness (5 minute window to prevent replay attacks)
+        const now = Date.now();
+        if (Math.abs(now - inputs.timestamp) > 300000) {
+          this.res.status(400);
+          return { success: false, error: 'Request expired. Timestamp must be within 5 minutes.' };
+        }
+
+        // 3. Verify Ed25519 signature
+        try {
+          const { Ed25519PublicKey } = await import('@iota/iota-sdk/keypairs/ed25519');
+          if (!admin.publicKey) {
+            this.res.status(401);
+            return { success: false, error: 'Admin has no registered Ed25519 public key.' };
+          }
+          const message = JSON.stringify({
+            action: 'full-reset',
+            adminAddress: inputs.adminAddress,
+            timestamp: inputs.timestamp,
+          });
+          const pubKey = new Ed25519PublicKey(Buffer.from(admin.publicKey, 'hex'));
+          const msgBytes = new TextEncoder().encode(message);
+          const sigBytes = Buffer.from(inputs.signature, 'base64');
+          const valid = await pubKey.verify(msgBytes, sigBytes);
+          if (!valid) {
+            this.res.status(401);
+            return { success: false, error: 'Invalid Ed25519 signature.' };
+          }
+        } catch (verifyErr) {
+          console.error(`[full-reset] Signature verification failed: ${verifyErr.message}`);
+          this.res.status(401);
+          return { success: false, error: 'Signature verification failed.' };
+        }
+
+        console.log('[full-reset] Starting full reset (authorized by admin:', inputs.adminAddress, ')...');
       } else {
         console.log('[full-reset] Starting full reset (empty forum)...');
       }
@@ -112,6 +143,10 @@ module.exports = {
         let content = fs.readFileSync(CONFIG_PATH, 'utf8');
         content = content.replace(/FORUM_PACKAGE_ID:\s*'[^']*'/, "FORUM_PACKAGE_ID: null");
         content = content.replace(/FORUM_OBJECT_ID:\s*'[^']*'/, "FORUM_OBJECT_ID: null");
+        content = content.replace(/FORUM_REGISTRY_ID:\s*'[^']*'/, "FORUM_REGISTRY_ID: null");
+        content = content.replace(/FORUM_TREASURY_ID:\s*'[^']*'/, "FORUM_TREASURY_ID: null");
+        content = content.replace(/FORUM_SUBSCRIPTION_STORE_ID:\s*'[^']*'/, "FORUM_SUBSCRIPTION_STORE_ID: null");
+        content = content.replace(/FORUM_MARKETPLACE_STORE_ID:\s*'[^']*'/, "FORUM_MARKETPLACE_STORE_ID: null");
         content = content.replace(/ADMIN_CAP_ID:\s*'[^']*'/, "ADMIN_CAP_ID: null");
         fs.writeFileSync(CONFIG_PATH, content, 'utf8');
         console.log('[full-reset] Move contract IDs cleared');

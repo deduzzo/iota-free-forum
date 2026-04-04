@@ -19,6 +19,11 @@ module.exports = {
       let explorerUrl = null;
       let packageId = null;
       let forumObjectId = null;
+      let registryId = null;
+      let treasuryId = null;
+      let subscriptionStoreId = null;
+      let marketplaceStoreId = null;
+      let governanceStoreId = null;
       let moveMode = false;
 
       try {
@@ -28,6 +33,11 @@ module.exports = {
         explorerUrl = config.IOTA_EXPLORER_URL || null;
         packageId = config.FORUM_PACKAGE_ID || null;
         forumObjectId = config.FORUM_OBJECT_ID || null;
+        registryId = config.FORUM_REGISTRY_ID || null;
+        treasuryId = config.FORUM_TREASURY_ID || null;
+        subscriptionStoreId = config.FORUM_SUBSCRIPTION_STORE_ID || null;
+        marketplaceStoreId = config.FORUM_MARKETPLACE_STORE_ID || null;
+        governanceStoreId = config.FORUM_GOVERNANCE_STORE_ID || null;
         moveMode = iota.isMoveModeEnabled();
       } catch (e) {
         console.log('[api-forum-info] Could not get wallet info:', e.message);
@@ -44,9 +54,16 @@ module.exports = {
         }
       } catch (e) { /* ignore */ }
 
-      // Connection string: Move mode uses packageId:forumObjectId, legacy uses address
+      // Connection string: 7-segment format with all shared objects
+      // Format: network:packageId:forumId:registryId:treasuryId:subscriptionStoreId:marketplaceStoreId
+      // Falls back to 3-segment (legacy) if new IDs not yet configured
       let connectionString = null;
-      if (moveMode && packageId && forumObjectId) {
+      if (moveMode && packageId && forumObjectId && registryId && treasuryId && subscriptionStoreId && marketplaceStoreId) {
+        connectionString = governanceStoreId
+          ? `${network}:${packageId}:${forumObjectId}:${registryId}:${treasuryId}:${subscriptionStoreId}:${marketplaceStoreId}:${governanceStoreId}`
+          : `${network}:${packageId}:${forumObjectId}:${registryId}:${treasuryId}:${subscriptionStoreId}:${marketplaceStoreId}`;
+      } else if (moveMode && packageId && forumObjectId) {
+        // Legacy 3-segment format (backward compat)
         connectionString = `${network}:${packageId}:${forumObjectId}`;
       } else if (address) {
         connectionString = `${network}:${address}`;
@@ -60,8 +77,13 @@ module.exports = {
         explorerUrl,
         packageId,
         forumObjectId,
+        registryId,
+        treasuryId,
+        subscriptionStoreId,
+        marketplaceStoreId,
+        governanceStoreId,
         moveMode,
-        version: '0.1.0',
+        version: '0.2.0',
         connectionString,
       };
     } catch (err) {

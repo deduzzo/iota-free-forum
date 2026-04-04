@@ -1,0 +1,46 @@
+---
+title: Admin Audit Dashboard
+description: Transaction explorer, real-time charts, and CSV export for full transparency.
+---
+
+The **Admin Audit Dashboard** provides administrators with complete visibility into forum activity and blockchain transactions.
+
+## Features
+
+### Transaction Explorer
+
+Browse all blockchain transactions indexed by the forum:
+
+- Filter by event type (post, tip, escrow, moderation, etc.)
+- Filter by user address
+- Filter by date range
+- View transaction details including TX digest, event data, and timestamps
+- Click any TX digest to view it on the IOTA Explorer
+
+### Real-Time Charts
+
+Visual analytics updated in real-time:
+
+- **Activity over time**: posts, threads, and votes per hour/day
+- **Payment volume**: tips, subscriptions, and marketplace purchases
+- **User growth**: registrations over time
+- **Escrow activity**: creation, resolution, and dispute rates
+
+### CSV Export
+
+Export any filtered dataset as CSV for external analysis:
+
+- Transaction logs
+- User activity reports
+- Payment summaries
+- Escrow lifecycle data
+
+## Access
+
+The Audit Dashboard is available at `/admin/audit` and requires **Admin** role (level 3).
+
+## How It Works
+
+The dashboard queries the SQLite cache using aggregate SQL queries optimized for performance. Data is served through dedicated API endpoints with in-memory caching (TTL-based) to avoid repeated expensive queries.
+
+All data displayed in the dashboard is derived from blockchain events, ensuring it matches the on-chain source of truth.

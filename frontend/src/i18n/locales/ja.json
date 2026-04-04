@@ -6,7 +6,11 @@
     "admin": "管理",
     "settings": "設定",
     "setup": "セットアップ / 接続",
-    "search": "検索..."
+    "search": "検索...",
+    "wallet": "ウォレット",
+    "marketplace": "マーケットプレイス",
+    "escrow": "エスクロー",
+    "subscription": "サブスクリプション"
   },
   "home": {
     "categories": "カテゴリ",
@@ -184,7 +188,14 @@
     "confirmIrreversible": "もう一度クリックして確認 — この操作は取り消せません！",
     "currentWillBeLost": "現在のアイデンティティは永久に失われます",
     "activity": "アクティビティ",
-    "reputation": "評判"
+    "reputation": "評判",
+    "walletRequired": "このページにアクセスするにはウォレットが必要です。下でウォレットを作成してください。",
+    "rememberMe": "このデバイスで記憶する",
+    "passwordStrength": {
+      "weak": "弱い",
+      "medium": "普通",
+      "strong": "強い"
+    }
   },
   "admin": {
     "title": "管理パネル",
@@ -345,5 +356,11 @@
     "faucetRequested": "フォーセットに自動リクエスト済み",
     "addressNotAvailable": "アドレスが利用できません",
     "sendAtLeast": "機能を復元するには、このアドレスに少なくとも1 IOTAを送信してください。"
+  },
+  "guest": {
+    "banner": {
+      "title": "参加しませんか？2分でウォレットを作成できます",
+      "cta": "ウォレットを作成"
+    }
   }
 }

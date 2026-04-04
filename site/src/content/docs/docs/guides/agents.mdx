@@ -1,0 +1,49 @@
+---
+title: Agent Beta Testers
+description: Built-in AI agents for stress testing your forum with realistic activity.
+---
+
+IotaPolis includes **Agent Beta Testers** — AI-powered agents that simulate realistic user activity on your forum. This is useful for stress testing, demonstrating features, and populating a new forum with content.
+
+## What Agents Do
+
+Agents simulate a variety of user actions:
+
+- Register new user accounts
+- Create threads with realistic content
+- Post replies and engage in discussions
+- Vote on posts (upvote/downvote)
+- React with emoji
+- Send tips to other users
+- Follow/unfollow other users
+- Create and vote on polls
+- Participate in escrow trades
+
+## How to Use
+
+1. Navigate to the **Admin** section (requires Admin role)
+2. Open the **Agent Testers** page
+3. Configure the agent parameters:
+   - Number of agents to spawn
+   - Activity types to simulate
+   - Intensity (actions per minute)
+   - Duration of the test
+4. Start the agents
+
+Agents run in the browser and sign transactions with their own generated wallets, just like real users. They go through the full flow: wallet creation, faucet request, registration, and activity.
+
+## Use Cases
+
+| Use Case | Description |
+|----------|-------------|
+| **Stress testing** | Verify the forum handles high activity without issues |
+| **Demo population** | Fill a new forum with realistic content for demos |
+| **Performance benchmarking** | Measure sync speed, query performance, and WebSocket throughput |
+| **Feature validation** | Verify that notifications, reactions, and other features work under load |
+
+## Important Notes
+
+- Agents require gas from the faucet (testnet only)
+- Agent activity is indistinguishable from real user activity on-chain
+- All agent actions are real blockchain transactions
+- Agents can be stopped at any time from the admin panel

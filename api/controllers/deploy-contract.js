@@ -147,20 +147,30 @@ module.exports = {
 
       log(`TX digest: ${result.digest}`);
 
-      // 7. Extract IDs
+      // 7. Extract IDs — 5 shared objects + AdminCap
       let packageId = null;
       let forumObjectId = null;
+      let registryId = null;
+      let treasuryId = null;
+      let subscriptionStoreId = null;
+      let marketplaceStoreId = null;
       let adminCapId = null;
 
       for (const change of (result.objectChanges || [])) {
         if (change.type === 'published') packageId = change.packageId;
         if (change.type === 'created') {
-          if (change.objectType?.includes('::forum::Forum')) forumObjectId = change.objectId;
+          if (change.objectType?.includes('::forum::Forum') && !change.objectType?.includes('::forum::ForumEvent')) {
+            forumObjectId = change.objectId;
+          }
+          if (change.objectType?.includes('::forum::UserRegistry')) registryId = change.objectId;
+          if (change.objectType?.includes('::forum::Treasury')) treasuryId = change.objectId;
+          if (change.objectType?.includes('::forum::SubscriptionStore')) subscriptionStoreId = change.objectId;
+          if (change.objectType?.includes('::forum::MarketplaceStore')) marketplaceStoreId = change.objectId;
           if (change.objectType?.includes('::forum::AdminCap')) adminCapId = change.objectId;
         }
       }
 
-      if (!packageId || !forumObjectId) {
+      if (!packageId || !forumObjectId || !registryId) {
         log('Could not extract IDs from transaction');
         this.res.status(500);
         return { success: false, error: 'Deploy succeeded but could not extract IDs', logs, digest: result.digest };
@@ -168,19 +178,31 @@ module.exports = {
 
       log(`Package ID: ${packageId}`);
       log(`Forum Object: ${forumObjectId}`);
+      log(`Registry: ${registryId}`);
+      log(`Treasury: ${treasuryId || 'N/A'}`);
+      log(`SubscriptionStore: ${subscriptionStoreId || 'N/A'}`);
+      log(`MarketplaceStore: ${marketplaceStoreId || 'N/A'}`);
       log(`Admin Cap: ${adminCapId || 'N/A'}`);
 
       // 8. Save to config
       _saveToConfig('FORUM_PACKAGE_ID', packageId);
       _saveToConfig('FORUM_OBJECT_ID', forumObjectId);
+      _saveToConfig('FORUM_REGISTRY_ID', registryId);
+      if (treasuryId) _saveToConfig('FORUM_TREASURY_ID', treasuryId);
+      if (subscriptionStoreId) _saveToConfig('FORUM_SUBSCRIPTION_STORE_ID', subscriptionStoreId);
+      if (marketplaceStoreId) _saveToConfig('FORUM_MARKETPLACE_STORE_ID', marketplaceStoreId);
       if (adminCapId) _saveToConfig('ADMIN_CAP_ID', adminCapId);
 
       // Update in-memory config
       config.FORUM_PACKAGE_ID = packageId;
       config.FORUM_OBJECT_ID = forumObjectId;
+      config.FORUM_REGISTRY_ID = registryId;
+      if (treasuryId) config.FORUM_TREASURY_ID = treasuryId;
+      if (subscriptionStoreId) config.FORUM_SUBSCRIPTION_STORE_ID = subscriptionStoreId;
+      if (marketplaceStoreId) config.FORUM_MARKETPLACE_STORE_ID = marketplaceStoreId;
       if (adminCapId) config.ADMIN_CAP_ID = adminCapId;
 
-      const connectionString = `${network}:${packageId}:${forumObjectId}`;
+      const connectionString = `${network}:${packageId}:${forumObjectId}:${registryId}:${treasuryId || ''}:${subscriptionStoreId || ''}:${marketplaceStoreId || ''}`;
       log(`Deployed! Connection: ${connectionString}`);
 
       // Broadcast
@@ -196,6 +218,10 @@ module.exports = {
         success: true,
         packageId,
         forumObjectId,
+        registryId,
+        treasuryId,
+        subscriptionStoreId,
+        marketplaceStoreId,
         adminCapId,
         connectionString,
         digest: result.digest,

@@ -43,11 +43,37 @@ function _setGlobalUnlocked(val, kp = null) {
   _unlockListeners.forEach(fn => fn(val));
 }
 
+/**
+ * @typedef {Object} IdentityState
+ * @property {{address: string, username: string|null, encryptedMnemonic: string, userId: string}|null} identity - Current identity (null if not set up)
+ * @property {boolean} unlocked - Whether the wallet is unlocked (keypair in memory)
+ * @property {boolean} loading - Whether the identity is still loading from localStorage
+ * @property {{packageId: string, forumObjectId: string, registryId: string|null, treasuryId: string|null, subscriptionStoreId: string|null, marketplaceStoreId: string|null, network: string, explorerUrl: string}|null} forumConfig
+ * @property {import('@iota/iota-sdk/keypairs/ed25519').Ed25519Keypair|null} keypair
+ * @property {(password: string) => Promise<{mnemonic: string, address: string}>} generateIdentity
+ * @property {() => void} confirmMnemonicSaved
+ * @property {(password: string) => Promise<boolean>} unlockIdentity
+ * @property {() => void} lockIdentity
+ * @property {(username: string) => Promise<Object>} registerUsername
+ * @property {(tx: import('@iota/iota-sdk/transactions').Transaction) => Promise<Object>} signAndSendTx
+ * @property {(tag: string, entityId: string, dataObject: Object, version?: number) => Promise<Object>} postEvent
+ * @property {(password: string) => Promise<string>} exportMnemonic
+ * @property {(mnemonic: string, password: string) => Promise<Object>} importIdentity
+ * @property {(oldPassword: string, newPassword: string) => Promise<boolean>} changePassword
+ * @property {() => void} clearIdentity
+ * @property {() => Promise<Object|null>} getBalance
+ * @property {(url: string, method: string, data?: Object) => Promise<Response>} signAndSend
+ */
+
+/**
+ * React hook that manages the user's IOTA Ed25519 identity.
+ * @returns {IdentityState}
+ */
 export function useIdentity() {
   const [identity, setIdentity] = useState(null);   // { address, username, encryptedMnemonic }
   const [unlocked, setUnlocked] = useState(_unlocked);
   const [loading, setLoading] = useState(true);
-  const [forumConfig, setForumConfig] = useState(null); // { packageId, forumObjectId, network }
+  const [forumConfig, setForumConfig] = useState(null); // { packageId, forumObjectId, registryId, treasuryId, subscriptionStoreId, marketplaceStoreId, network }
 
   // Sync local state with global singleton
   useEffect(() => {
@@ -77,7 +103,7 @@ export function useIdentity() {
     setLoading(false);
   }, []);
 
-  // Fetch forum config (packageId, forumObjectId, network) once
+  // Fetch forum config (packageId, forumObjectId, registryId, etc.) once
   useEffect(() => {
     let cancelled = false;
     api.getForumInfo()
@@ -86,6 +112,11 @@ export function useIdentity() {
         const cfg = {
           packageId: info.packageId,
           forumObjectId: info.forumObjectId,
+          registryId: info.registryId || null,
+          treasuryId: info.treasuryId || null,
+          subscriptionStoreId: info.subscriptionStoreId || null,
+          marketplaceStoreId: info.marketplaceStoreId || null,
+          governanceStoreId: info.governanceStoreId || null,
           network: info.network || 'testnet',
           explorerUrl: info.explorerUrl,
         };
@@ -196,7 +227,7 @@ export function useIdentity() {
    */
   const registerUsername = useCallback(async (username) => {
     if (!keypairRef.current) throw new Error('Identity not unlocked');
-    if (!forumConfig?.packageId || !forumConfig?.forumObjectId) {
+    if (!forumConfig?.packageId || !forumConfig?.registryId) {
       throw new Error('Forum not configured — contract not deployed');
     }
 
@@ -211,7 +242,7 @@ export function useIdentity() {
     tx.moveCall({
       target: `${forumConfig.packageId}::forum::register`,
       arguments: [
-        tx.object(forumConfig.forumObjectId),
+        tx.object(forumConfig.registryId),
         tx.pure.vector('u8', Array.from(new TextEncoder().encode(entityId))),
         tx.pure.vector('u8', Array.from(data)),
         tx.object(CLOCK_OBJECT_ID),
@@ -305,11 +336,12 @@ export function useIdentity() {
     FORUM_ROLE: 'Ruolo utente',
     FORUM_CONFIG: 'Configurazione',
     FORUM_USER: 'Profilo utente',
+    FORUM_DM: 'Messaggio diretto',
   };
 
   const postEvent = useCallback(async (tag, entityId, dataObject, version = 1) => {
     if (!keypairRef.current) throw new Error('Identity not unlocked');
-    if (!forumConfig?.packageId || !forumConfig?.forumObjectId) {
+    if (!forumConfig?.packageId || !forumConfig?.forumObjectId || !forumConfig?.registryId) {
       throw new Error('Forum not configured');
     }
 
@@ -340,9 +372,10 @@ export function useIdentity() {
         target = `${forumConfig.packageId}::forum::post_event`;
       }
 
+      // post_event, mod_post_event, admin_post_event all need Forum + UserRegistry
       tx.moveCall({
         target,
-        arguments: [tx.object(forumConfig.forumObjectId), ...commonArgs],
+        arguments: [tx.object(forumConfig.forumObjectId), tx.object(forumConfig.registryId), ...commonArgs],
       });
       tx.setGasBudget(50_000_000);
 

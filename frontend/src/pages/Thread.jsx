@@ -374,6 +374,26 @@ export default function Thread() {
     [identity, postEvent, addToast, setData],
   );
 
+  // React to a post (emoji reaction via blockchain)
+  const handleReact = useCallback(
+    async (postId, emoji, action) => {
+      if (!identity || !postEvent) return;
+      try {
+        const reactId = `REACT_${postId}_${identity.userId}_${emoji}`;
+        await postEvent('FORUM_REACTION', reactId, {
+          id: reactId,
+          postId,
+          emoji,
+          action, // 'add' or 'remove'
+          createdAt: Date.now(),
+        }, 1);
+      } catch (err) {
+        console.error('Reaction failed:', err);
+      }
+    },
+    [identity, postEvent],
+  );
+
   if (loading) {
     return <LoadingSpinner size={32} className="min-h-[40vh]" />;
   }
@@ -588,6 +608,7 @@ export default function Thread() {
           onCancelReply={() => setReplyToId(null)}
           freshPostIds={freshPostIds}
           layout={isInvisionLayout ? 'table' : 'cards'}
+          onReact={handleReact}
         />
       </div>
 

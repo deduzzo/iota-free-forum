@@ -32,12 +32,52 @@ module.exports.routes = {
   'GET /api/v1/marketplace': { action: 'api-marketplace' },
   'GET /api/v1/tips/:postId': { action: 'api-tips' },
 
+  // ── Notifications ──────────────────────────────────────────────
+  'GET /api/v1/notifications/:userId': { action: 'api-notifications' },
+  'GET /api/v1/notifications/:userId/unread-count': { action: 'api-notifications-unread' },
+  'PUT /api/v1/notifications/:id/read': { action: 'api-notification-read' },
+  'PUT /api/v1/notifications/:userId/read-all': { action: 'api-notifications-read-all' },
+
+  // ── Reactions ──────────────────────────────────────────────────
+  'GET /api/v1/reactions/:postId': { action: 'api-reactions' },
+
+  // ── Direct Messages (E2E encrypted) ───────────────────────────
+  'GET /api/v1/dm/conversations/:userId': { action: 'api-dm-conversations' },
+  'GET /api/v1/dm/:userId/unread-count': { action: 'api-dm-unread' },
+  'GET /api/v1/dm/:userId/:otherUserId': { action: 'api-dm-messages' },
+
+  // ── Social Graph (follows) ──────────────────────────────────
+  'GET /api/v1/followers/:userId': { action: 'api-follows' },
+  'GET /api/v1/following/:userId': { action: 'api-follows' },
+  'GET /api/v1/followers/:userId/count': { action: 'api-follows' },
+
+  // ── Governance ────────────────────────────────────────────────
+  'GET /api/v1/polls': { action: 'api-polls' },
+  'GET /api/v1/polls/:id': { action: 'api-polls' },
+  'GET /api/v1/proposals': { action: 'api-proposals' },
+  'GET /api/v1/proposals/:id': { action: 'api-proposals' },
+
+  // ── RSS Feeds ─────────────────────────────────────────────────
+  'GET /api/v1/rss/latest': { action: 'api-rss' },
+  'GET /api/v1/rss/category/:categoryId': { action: 'api-rss' },
+
   // =====================================================================
   // ADMIN endpoints (require admin authentication)
   // =====================================================================
+  'GET /api/v1/admin/audit/stats': { action: 'api-audit' },
+  'GET /api/v1/admin/audit/export': { action: 'api-audit' },
+  'GET /api/v1/admin/audit/transactions/:id': { action: 'api-audit' },
+  'GET /api/v1/admin/audit/transactions': { action: 'api-audit' },
   'POST /api/v1/sync-reset': { action: 'api-sync-reset' },
   'POST /api/v1/sync-connect': { action: 'sync-connect' },
   'POST /api/v1/full-reset': { action: 'full-reset' },
+
+  // ── Agent Beta Testers ─────────────────────────────────────────
+  'POST /api/v1/admin/agents/start': { action: 'api-agents' },
+  'POST /api/v1/admin/agents/stop': { action: 'api-agents' },
+  'POST /api/v1/admin/agents/pause': { action: 'api-agents' },
+  'GET /api/v1/admin/agents/status': { action: 'api-agents' },
+  'GET /api/v1/admin/agents/feedback': { action: 'api-agents' },
 
   // =====================================================================
   // DEPRECATED write endpoints — now return 410 Gone

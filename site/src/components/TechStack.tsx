@@ -4,7 +4,10 @@ const techs = [
   { name: 'React 19', desc: 'Frontend framework', color: '#61dafb' },
   { name: 'Sails.js', desc: 'Backend indexer', color: '#38bdf8' },
   { name: 'Electron', desc: 'Desktop application', color: '#47848f' },
-  { name: 'SQLite', desc: 'Local cache / index', color: '#003b57' },
+  { name: 'Capacitor', desc: 'Native mobile (iOS/Android)', color: '#53b9ff' },
+  { name: 'SQLite', desc: 'Local cache / FTS5 search', color: '#003b57' },
+  { name: 'X25519', desc: 'E2E encrypted messaging', color: '#f472b6' },
+  { name: 'GovernanceStore', desc: 'On-chain polls & proposals', color: '#fbbf24' },
 ];
 
 export default function TechStack() {

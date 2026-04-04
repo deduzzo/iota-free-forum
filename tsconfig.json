@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@api/*": ["api/*"],
+      "@config/*": ["config/*"]
+    }
+  },
+  "include": ["api/**/*", "config/**/*", "test/**/*"],
+  "exclude": ["node_modules", "frontend", ".tmp"]
+}

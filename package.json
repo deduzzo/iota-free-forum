@@ -25,7 +25,13 @@
     "desktop:build:win": "npm run build && cd desktop && npm install && npx electron-builder --win --publish never",
     "desktop:build:mac": "npm run build && cd desktop && npm install && npx electron-builder --mac --publish never",
     "desktop:build:linux": "npm run build && cd desktop && npm install && npx electron-builder --linux --publish never",
-    "release": "./scripts/release.sh"
+    "release": "./scripts/release.sh",
+    "test": "vitest run",
+    "test:all": "vitest run && cd frontend && npx vitest run",
+    "test:watch": "vitest",
+    "mobile:build": "cd frontend && npm run cap:build",
+    "mobile:ios": "cd frontend && npm run cap:ios",
+    "mobile:android": "cd frontend && npm run cap:android"
   },
   "dependencies": {
     "@iota/iota-sdk": "^1.10.1",
@@ -40,7 +46,8 @@
     "sails-hook-sockets": "^2.0.0"
   },
   "devDependencies": {
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=17.0.0"

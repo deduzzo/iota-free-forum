@@ -6,7 +6,11 @@
     "admin": "管理",
     "settings": "设置",
     "setup": "设置 / 连接",
-    "search": "搜索..."
+    "search": "搜索...",
+    "wallet": "钱包",
+    "marketplace": "市场",
+    "escrow": "托管",
+    "subscription": "订阅"
   },
   "home": {
     "categories": "分类",
@@ -184,7 +188,14 @@
     "confirmIrreversible": "再次点击确认 — 此操作不可逆！",
     "currentWillBeLost": "你当前的身份将永久丢失",
     "activity": "活动",
-    "reputation": "声望"
+    "reputation": "声望",
+    "walletRequired": "你需要一个钱包才能访问该页面。在下方创建一个以开始使用。",
+    "rememberMe": "在此设备上记住我",
+    "passwordStrength": {
+      "weak": "弱",
+      "medium": "中",
+      "strong": "强"
+    }
   },
   "admin": {
     "title": "管理面板",
@@ -345,5 +356,11 @@
     "faucetRequested": "已自动请求水龙头",
     "addressNotAvailable": "地址不可用",
     "sendAtLeast": "请向此地址发送至少1 IOTA以恢复功能。"
+  },
+  "guest": {
+    "banner": {
+      "title": "想参与吗？2分钟内创建你的钱包",
+      "cta": "创建钱包"
+    }
   }
 }

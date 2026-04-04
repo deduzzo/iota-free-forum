@@ -71,6 +71,10 @@ module.exports = {
   // Set after deploying with: node api/utility/move-publish.js
   FORUM_PACKAGE_ID: null,
   FORUM_OBJECT_ID: null,
+  FORUM_REGISTRY_ID: null,
+  FORUM_TREASURY_ID: null,
+  FORUM_SUBSCRIPTION_STORE_ID: null,
+  FORUM_MARKETPLACE_STORE_ID: null,
   ADMIN_CAP_ID: null,
 
   // ── Explorer ──────────────────────────────────────────────────

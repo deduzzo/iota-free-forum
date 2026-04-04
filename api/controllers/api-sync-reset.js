@@ -91,6 +91,7 @@ module.exports = {
         DELETE FROM badges_config;
         DELETE FROM user_badges;
         DELETE FROM ratings;
+        DELETE FROM transaction_log;
         INSERT INTO search_index(search_index) VALUES('delete-all');
       `);
 

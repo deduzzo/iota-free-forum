@@ -96,4 +96,116 @@ export const api = {
   // Tips on a specific post
   getPostTips: (postId) =>
     fetch(`${API_BASE}/tips/${postId}`).then((r) => r.json()),
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  getNotifications: (userId, page = 1, type = null) => {
+    const params = new URLSearchParams({ page });
+    if (type) params.set('type', type);
+    return fetch(`${API_BASE}/notifications/${userId}?${params}`).then((r) => r.json());
+  },
+
+  getUnreadCount: (userId) =>
+    fetch(`${API_BASE}/notifications/${userId}/unread-count`).then((r) => r.json()),
+
+  markNotificationRead: (id) =>
+    fetch(`${API_BASE}/notifications/${id}/read`, { method: 'PUT' }).then((r) => r.json()),
+
+  markAllNotificationsRead: (userId) =>
+    fetch(`${API_BASE}/notifications/${userId}/read-all`, { method: 'PUT' }).then((r) => r.json()),
+
+  // ── Reactions ─────────────────────────────────────────────────────────
+  getReactions: (postId) =>
+    fetch(`${API_BASE}/reactions/${postId}`).then((r) => r.json()),
+
+  // ── Direct Messages (E2E encrypted) ─────────────────────────────────
+  getDMConversations: (userId) =>
+    fetch(`${API_BASE}/dm/conversations/${userId}`).then((r) => r.json()),
+
+  getDMMessages: (userId, otherUserId, page = 1) =>
+    fetch(`${API_BASE}/dm/${userId}/${otherUserId}?page=${page}`).then((r) => r.json()),
+
+  getDMUnreadCount: (userId) =>
+    fetch(`${API_BASE}/dm/${userId}/unread-count`).then((r) => r.json()),
+
+  // ── Audit Dashboard (admin) ─────────────────────────────────────────
+  getAuditStats: (adminAddress) =>
+    fetch(`${API_BASE}/admin/audit/stats?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+
+  getAuditTransactions: (adminAddress, filters = {}) => {
+    const params = new URLSearchParams({ adminAddress });
+    if (filters.tag) params.set('tag', filters.tag);
+    if (filters.authorId) params.set('authorId', filters.authorId);
+    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params.set('dateTo', filters.dateTo);
+    if (filters.page) params.set('page', filters.page);
+    if (filters.limit) params.set('limit', filters.limit);
+    return fetch(`${API_BASE}/admin/audit/transactions?${params}`).then((r) => r.json());
+  },
+
+  getAuditTransaction: (adminAddress, id) =>
+    fetch(`${API_BASE}/admin/audit/transactions/${id}?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+
+  getAuditExportUrl: (adminAddress, filters = {}) => {
+    const params = new URLSearchParams({ adminAddress });
+    if (filters.tag) params.set('tag', filters.tag);
+    if (filters.authorId) params.set('authorId', filters.authorId);
+    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params.set('dateTo', filters.dateTo);
+    return `${API_BASE}/admin/audit/export?${params}`;
+  },
+
+  // ── Social Graph (follows) ──���────────────────────────��─────────────
+  getFollowers: (userId) =>
+    fetch(`${API_BASE}/followers/${userId}`).then((r) => r.json()),
+
+  getFollowing: (userId) =>
+    fetch(`${API_BASE}/following/${userId}`).then((r) => r.json()),
+
+  getFollowCounts: (userId) =>
+    fetch(`${API_BASE}/followers/${userId}/count`).then((r) => r.json()),
+
+  // ── Governance ─────────────────��───────────────────────────────────
+  getPolls: (page = 1, status = 'all') => {
+    const params = new URLSearchParams({ page, status });
+    return fetch(`${API_BASE}/polls?${params}`).then((r) => r.json());
+  },
+
+  getPoll: (id) =>
+    fetch(`${API_BASE}/polls/${id}`).then((r) => r.json()),
+
+  getProposals: (page = 1, status = 'all') => {
+    const params = new URLSearchParams({ page, status });
+    return fetch(`${API_BASE}/proposals?${params}`).then((r) => r.json());
+  },
+
+  getProposal: (id) =>
+    fetch(`${API_BASE}/proposals/${id}`).then((r) => r.json()),
+
+  // ── Agent Beta Testers (admin) ───────────────────────────────────────
+  startAgents: (adminAddress, config) =>
+    fetch(`${API_BASE}/admin/agents/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminAddress, ...config }),
+    }).then((r) => r.json()),
+
+  stopAgents: (adminAddress) =>
+    fetch(`${API_BASE}/admin/agents/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminAddress }),
+    }).then((r) => r.json()),
+
+  pauseAgents: (adminAddress) =>
+    fetch(`${API_BASE}/admin/agents/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminAddress }),
+    }).then((r) => r.json()),
+
+  getAgentsStatus: (adminAddress) =>
+    fetch(`${API_BASE}/admin/agents/status?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+
+  getAgentsFeedback: (adminAddress) =>
+    fetch(`${API_BASE}/admin/agents/feedback?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
 };

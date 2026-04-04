@@ -106,11 +106,13 @@ export default function EscrowCard({
   onDispute,
   onVoteRelease,
   onVoteRefund,
+  onClaimExpired,
   onRate,
 }) {
   const { t } = useTranslation();
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [claimLoading, setClaimLoading] = useState(false);
 
   const {
     id, buyer, seller, arbitrator,
@@ -126,11 +128,24 @@ export default function EscrowCard({
   const isSeller = currentUserId === seller?.id || currentUserId === seller;
   const isArbitrator = currentUserId === arbitrator?.id || currentUserId === arbitrator;
   const isParty = isBuyer || isSeller || isArbitrator;
+  const isExpired = deadline && new Date(deadline).getTime() < Date.now();
 
   // Vote progress
   const releaseVotes = votes.release || 0;
   const refundVotes = votes.refund || 0;
   const totalVotes = releaseVotes + refundVotes;
+
+  async function handleClaimExpired() {
+    if (!confirm(t('escrow.claimExpiredConfirm'))) return;
+    setClaimLoading(true);
+    try {
+      await onClaimExpired?.(escrow.objectId || id);
+    } catch (err) {
+      console.error('[EscrowCard] Claim expired failed:', err);
+    } finally {
+      setClaimLoading(false);
+    }
+  }
 
   async function handleRate(data) {
     setRatingSubmitting(true);
@@ -335,6 +350,25 @@ export default function EscrowCard({
               {t('escrow.voteRefund')}
             </motion.button>
           </>
+        )}
+
+        {/* Buyer: Claim expired escrow */}
+        {isBuyer && status !== 'resolved' && isExpired && (
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={handleClaimExpired}
+            disabled={claimLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+            style={{
+              backgroundColor: 'rgba(255,170,0,0.1)',
+              color: 'var(--color-warning)',
+              border: '1px solid rgba(255,170,0,0.2)',
+            }}
+          >
+            <Clock size={12} />
+            {claimLoading ? t('common.loading') : t('escrow.claimExpired')}
+          </motion.button>
         )}
 
         {/* Rate after resolution */}

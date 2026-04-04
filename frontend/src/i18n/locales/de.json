@@ -6,7 +6,11 @@
     "admin": "Admin",
     "settings": "Einstellungen",
     "setup": "Setup / Verbinden",
-    "search": "Suchen..."
+    "search": "Suchen...",
+    "wallet": "Wallet",
+    "marketplace": "Marktplatz",
+    "escrow": "Escrow",
+    "subscription": "Abonnement"
   },
   "home": {
     "categories": "Kategorien",
@@ -184,7 +188,14 @@
     "confirmIrreversible": "Klicke erneut zur Bestaetigung — diese Aktion ist unwiderruflich!",
     "currentWillBeLost": "Deine aktuelle Identitaet geht dauerhaft verloren",
     "activity": "Aktivitaet",
-    "reputation": "Reputation"
+    "reputation": "Reputation",
+    "walletRequired": "Du brauchst ein Wallet, um auf diese Seite zuzugreifen. Erstelle unten eines, um loszulegen.",
+    "rememberMe": "Auf diesem Geraet merken",
+    "passwordStrength": {
+      "weak": "Schwach",
+      "medium": "Mittel",
+      "strong": "Stark"
+    }
   },
   "admin": {
     "title": "Admin-Panel",
@@ -345,5 +356,11 @@
     "faucetRequested": "Faucet automatisch angefordert",
     "addressNotAvailable": "Adresse nicht verfuegbar",
     "sendAtLeast": "Sende mindestens 1 IOTA an diese Adresse, um die Funktionalitaet wiederherzustellen."
+  },
+  "guest": {
+    "banner": {
+      "title": "Mitmachen? Erstelle dein Wallet in 2 Minuten",
+      "cta": "Wallet erstellen"
+    }
   }
 }

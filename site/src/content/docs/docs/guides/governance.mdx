@@ -1,0 +1,67 @@
+---
+title: Governance
+description: On-chain polls and governance proposals with quorum and deadline enforcement.
+---
+
+IotaPolis includes a governance system that lets the community make decisions transparently on-chain.
+
+## Polls
+
+Polls let any registered user create a question with multiple options and a deadline.
+
+### Creating a Poll
+
+1. Navigate to the **Governance** page
+2. Click **New Poll**
+3. Enter the question and add options (2 or more)
+4. Set a deadline
+5. Submit — the poll is created on-chain via a `FORUM_POLL` event
+
+### Voting
+
+- Each registered user can vote once on each poll
+- Votes are recorded on-chain as `FORUM_POLL_VOTE` events
+- Results are visible in real-time as votes come in
+- After the deadline, the poll is closed and final results are displayed
+
+### Verification
+
+Since all votes are blockchain events:
+- Vote counts are independently verifiable
+- No votes can be added, removed, or modified after submission
+- Any node can tally the results from on-chain data
+
+## Governance Proposals
+
+Proposals are a more formal mechanism for community decisions, featuring quorum requirements and binary yes/no voting.
+
+### Creating a Proposal
+
+1. Navigate to the **Governance** page and select the **Proposals** tab
+2. Click **New Proposal**
+3. Enter the title and description
+4. Set the **quorum** (minimum number of votes required for the proposal to be valid)
+5. Set the **deadline**
+6. Submit — the proposal is created on-chain via a `FORUM_PROPOSAL` event
+
+### Voting on Proposals
+
+- Each registered user can vote **Yes** or **No** once per proposal
+- Votes are recorded as `FORUM_PROPOSAL_VOTE` events
+- The vote count updates in real-time
+
+### Proposal States
+
+| State | Condition |
+|-------|-----------|
+| **Active** | Deadline has not passed |
+| **Passed** | Deadline passed, quorum met, majority voted Yes |
+| **Rejected** | Deadline passed, quorum met, majority voted No |
+| **Expired** | Deadline passed, quorum not met |
+
+### On-Chain Storage
+
+Proposals and their votes are stored in the **GovernanceStore** shared object. This ensures:
+- Proposal results are tamper-proof
+- Quorum requirements are enforced by the smart contract
+- The complete governance history is preserved on-chain

@@ -48,27 +48,28 @@ module.exports = {
         if (id.startsWith('THR_')) {
           type = 'thread';
           const thread = Threads.findOne({ id });
-          if (thread) {
-            const author = Users.findOne({ id: thread.authorId });
-            extra = {
-              categoryId: thread.categoryId,
-              authorUsername: (author?.showUsername) ? author.username : null,
-              authorShowUsername: author?.showUsername || 0,
-              createdAt: thread.createdAt,
-            };
-          }
+          if (!thread || thread.hidden === 1) return null; // Skip hidden threads
+          const author = Users.findOne({ id: thread.authorId });
+          extra = {
+            categoryId: thread.categoryId,
+            authorUsername: (author?.showUsername) ? author.username : null,
+            authorShowUsername: author?.showUsername || 0,
+            createdAt: thread.createdAt,
+          };
         } else if (id.startsWith('POST_')) {
           type = 'post';
           const post = Posts.findOne({ id });
-          if (post) {
-            const author = Users.findOne({ id: post.authorId });
-            extra = {
-              threadId: post.threadId,
-              authorUsername: (author?.showUsername) ? author.username : null,
-              authorShowUsername: author?.showUsername || 0,
-              createdAt: post.createdAt,
-            };
-          }
+          if (!post || post.hidden === 1) return null; // Skip hidden posts
+          // Also check if parent thread is hidden
+          const parentThread = Threads.findOne({ id: post.threadId });
+          if (parentThread && parentThread.hidden === 1) return null;
+          const author = Users.findOne({ id: post.authorId });
+          extra = {
+            threadId: post.threadId,
+            authorUsername: (author?.showUsername) ? author.username : null,
+            authorShowUsername: author?.showUsername || 0,
+            createdAt: post.createdAt,
+          };
         } else if (id.startsWith('USR_') || id.startsWith('0x')) {
           // User IDs can be legacy USR_ format or new IOTA addresses (0x...)
           type = 'user';
@@ -88,7 +89,7 @@ module.exports = {
           content: r.content?.substring(0, 200) || '',
           ...extra,
         };
-      });
+      }).filter(Boolean); // Remove hidden content entries
 
       return { success: true, results: enriched, query };
     } catch (err) {

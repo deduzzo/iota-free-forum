@@ -19,6 +19,7 @@ export default function NestedReplies({
   onCancelReply,
   freshPostIds,
   layout,
+  onReact,
 }) {
   if (!posts || posts.length === 0) return null;
 
@@ -53,6 +54,7 @@ export default function NestedReplies({
             onCancelReply={onCancelReply}
             isFresh={freshPostIds?.has(post.id)}
             layout={layout}
+            onReact={onReact}
           />
           <NestedReplies
             posts={posts}
@@ -71,6 +73,7 @@ export default function NestedReplies({
             onCancelReply={onCancelReply}
             freshPostIds={freshPostIds}
             layout={layout}
+            onReact={onReact}
           />
         </div>
       ))}
