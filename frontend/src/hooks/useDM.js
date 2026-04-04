@@ -18,7 +18,7 @@ import {
  * The server never sees plaintext — only ciphertext is stored.
  */
 export function useDM() {
-  const { identity, keypair, postEvent, unlocked } = useIdentity();
+  const { identity, keypair, postEvent, unlocked, getAuthHeaders } = useIdentity();
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -65,24 +65,26 @@ export function useDM() {
   // ── Fetch conversations ─────────────────────────────────────────────
 
   const fetchConversations = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !unlocked) return;
     setLoading(true);
     try {
-      const res = await api.getDMConversations(userId);
+      const headers = await getAuthHeaders();
+      const res = await api.getDMConversations(userId, headers);
       if (res.success) {
         setConversations(res.conversations || []);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [userId]);
+  }, [userId, unlocked, getAuthHeaders]);
 
   // ── Fetch messages for a conversation ───────────────────────────────
 
   const fetchMessages = useCallback(async (otherUserId, page = 1) => {
-    if (!userId || !otherUserId) return;
+    if (!userId || !otherUserId || !unlocked) return;
     setLoading(true);
     try {
-      const res = await api.getDMMessages(userId, otherUserId, page);
+      const headers = await getAuthHeaders();
+      const res = await api.getDMMessages(userId, otherUserId, headers, page);
       if (res.success) {
         setMessages(res.messages || []);
         return res;
@@ -90,7 +92,7 @@ export function useDM() {
     } catch { /* ignore */ }
     setLoading(false);
     return null;
-  }, [userId]);
+  }, [userId, unlocked, getAuthHeaders]);
 
   // ── Decrypt a single message ────────────────────────────────────────
 
@@ -155,14 +157,15 @@ export function useDM() {
   // ── Fetch unread count ──────────────────────────────────────────────
 
   const fetchUnreadCount = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !unlocked) return;
     try {
-      const res = await api.getDMUnreadCount(userId);
+      const headers = await getAuthHeaders();
+      const res = await api.getDMUnreadCount(userId, headers);
       if (res.success) {
         setUnreadCount(res.count || 0);
       }
     } catch { /* ignore */ }
-  }, [userId]);
+  }, [userId, unlocked, getAuthHeaders]);
 
   // Auto-fetch unread count on mount and identity change
   useEffect(() => {

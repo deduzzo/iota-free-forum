@@ -6,6 +6,7 @@
  */
 
 const db = require('../utility/db');
+const { verifyUser } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'API DM Messages',
@@ -23,6 +24,13 @@ module.exports = {
       if (!userId || !otherUserId) {
         this.res.status(400);
         return { success: false, error: 'Both userId and otherUserId are required' };
+      }
+
+      // Auth: verify caller owns this userId (only the owner can read their DMs)
+      const caller = await verifyUser(this.req);
+      if (!caller || caller !== userId) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Authentication required.' };
       }
 
       const page = parseInt(this.req.query.page) || 1;

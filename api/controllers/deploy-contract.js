@@ -9,6 +9,8 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const db = require('../utility/db');
+const { verifyAdmin } = require('../utility/authMiddleware');
 
 const CONFIG_PATH = process.env.FORUM_DATA_DIR
   ? path.join(process.env.FORUM_DATA_DIR, 'private_iota_conf.js')
@@ -33,6 +35,18 @@ module.exports = {
     const log = (msg) => { logs.push(msg); sails.log.info(`[deploy-contract] ${msg}`); };
 
     try {
+      // Auth: if users exist in DB, require admin authentication
+      const Users = db.getModel('users');
+      const userCount = Users.count();
+      if (userCount > 0) {
+        const admin = await verifyAdmin(this.req);
+        if (!admin) {
+          this.res.status(403);
+          return { success: false, error: 'Access denied. Admin authentication required (forum has users).', logs };
+        }
+        log(`Authorized by admin: ${admin}`);
+      }
+
       // 1. Check if already deployed
       const config = require('../../config/private_iota_conf');
       if (config.FORUM_PACKAGE_ID) {

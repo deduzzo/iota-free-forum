@@ -21,14 +21,19 @@ module.exports = {
 
   fn: async function (inputs) {
     try {
-      const query = inputs.q.trim();
+      let query = inputs.q.trim();
       if (!query || query.length < 2) {
         this.res.status(400);
         return { success: false, error: 'Query must be at least 2 characters' };
       }
 
-      // Sanitize FTS5 query (escape special chars)
-      const sanitized = query.replace(/['"]/g, '').replace(/[^\w\s*-]/g, '');
+      // Limit query length to prevent abuse
+      if (query.length > 200) {
+        query = query.substring(0, 200);
+      }
+
+      // Sanitize FTS5 query (escape special chars, strip leading '-' to prevent NOT operator abuse)
+      const sanitized = query.replace(/['"]/g, '').replace(/[^\w\s*-]/g, '').replace(/^-+/, '');
       if (!sanitized) {
         return { success: true, results: [] };
       }

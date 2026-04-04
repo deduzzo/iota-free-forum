@@ -49,7 +49,11 @@ module.exports.http = {
       }
 
       // Aggressive limit for heavy endpoints
-      if (req.path === '/api/v1/integrity-check' || req.path === '/api/v1/export-data') {
+      if (
+        req.path === '/api/v1/integrity-check' ||
+        req.path === '/api/v1/export-data' ||
+        req.path === '/api/v1/admin/audit/export'
+      ) {
         return heavyLimiter(req, res, next);
       }
 

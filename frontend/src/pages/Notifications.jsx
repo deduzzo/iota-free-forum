@@ -47,7 +47,7 @@ function formatDate(dateStr) {
 
 export default function Notifications() {
   const { t } = useTranslation();
-  const { identity } = useIdentity();
+  const { identity, getAuthHeaders, unlocked } = useIdentity();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,23 +58,25 @@ export default function Notifications() {
   const userId = identity?.userId;
 
   const fetchNotifications = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !unlocked) return;
     setLoading(true);
     try {
-      const res = await api.getNotifications(userId, page, filterType);
+      const headers = await getAuthHeaders();
+      const res = await api.getNotifications(userId, headers, page, filterType);
       if (res.success) {
         setNotifications(res.notifications || []);
         setTotal(res.total || 0);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [userId, page, filterType]);
+  }, [userId, unlocked, getAuthHeaders, page, filterType]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   async function handleMarkRead(notifId) {
     try {
-      await api.markNotificationRead(notifId);
+      const headers = await getAuthHeaders();
+      await api.markNotificationRead(notifId, headers);
       setNotifications((prev) => prev.map((n) => (n.id === notifId ? { ...n, read: 1 } : n)));
     } catch { /* ignore */ }
   }
@@ -82,7 +84,8 @@ export default function Notifications() {
   async function handleMarkAllRead() {
     if (!userId) return;
     try {
-      await api.markAllNotificationsRead(userId);
+      const headers = await getAuthHeaders();
+      await api.markAllNotificationsRead(userId, headers);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
     } catch { /* ignore */ }
   }

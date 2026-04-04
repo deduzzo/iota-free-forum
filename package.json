@@ -12,6 +12,7 @@
   "main": "app.js",
   "scripts": {
     "start": "NODE_ENV=production node app.js",
+    "full-reset": "node scripts/full-reset.js",
     "dev": "concurrently \"node app.js\" \"npm run dev:frontend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",

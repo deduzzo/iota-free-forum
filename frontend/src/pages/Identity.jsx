@@ -660,7 +660,7 @@ function UsernameCard({ identity, forumConfig, onRegister, onLock }) {
                 setError('');
                 try {
                   const { api } = await import('../api/endpoints');
-                  const result = await api.deployContract();
+                  const result = await api.deployContractFirstSetup();
                   if (result.success) {
                     setDeployLogs(result.logs || ['Deploy completed!']);
                     setDeployDone(true);

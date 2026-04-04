@@ -5,6 +5,7 @@
  */
 
 const db = require('../utility/db');
+const { verifyUser } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'API Notifications',
@@ -19,6 +20,13 @@ module.exports = {
   fn: async function () {
     try {
       const userId = this.req.params.userId;
+
+      // Auth: verify caller owns this userId
+      const caller = await verifyUser(this.req);
+      if (!caller || caller !== userId) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Authentication required.' };
+      }
       const page = parseInt(this.req.query.page) || 1;
       const perPage = parseInt(this.req.query.perPage) || 20;
       const type = this.req.query.type || null;

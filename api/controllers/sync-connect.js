@@ -7,6 +7,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+const db = require('../utility/db');
+const { verifyAdmin } = require('../utility/authMiddleware');
 
 const CONFIG_PATH = path.resolve(__dirname, '../../config/private_iota_conf.js');
 
@@ -24,6 +26,18 @@ module.exports = {
   },
 
   fn: async function (inputs) {
+    // Auth: if users exist in DB, require admin authentication via Ed25519 signature
+    const Users = db.getModel('users');
+    const userCount = Users.count();
+    if (userCount > 0) {
+      const admin = await verifyAdmin(this.req);
+      if (!admin) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Admin authentication required (forum has users).' };
+      }
+      console.log(`[sync-connect] Authorized by admin: ${admin}`);
+    }
+
     const raw = inputs.connectionString.trim();
     const parts = raw.split(':');
 

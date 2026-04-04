@@ -267,7 +267,7 @@ function TxRow({ tx, isNew }) {
 
 export default function AuditDashboard() {
   const { t } = useTranslation();
-  const { identity } = useIdentity();
+  const { identity, getAuthHeaders, unlocked } = useIdentity();
   const adminAddress = identity?.userId;
 
   // Stats
@@ -292,20 +292,22 @@ export default function AuditDashboard() {
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
-    if (!adminAddress) return;
+    if (!adminAddress || !unlocked) return;
     try {
-      const res = await api.getAuditStats(adminAddress);
+      const headers = await getAuthHeaders();
+      const res = await api.getAuditStats(headers);
       if (res.success) setStats(res.stats);
     } catch (e) { /* ignore */ }
     setStatsLoading(false);
-  }, [adminAddress]);
+  }, [adminAddress, unlocked, getAuthHeaders]);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
-    if (!adminAddress) return;
+    if (!adminAddress || !unlocked) return;
     setTxLoading(true);
     try {
-      const res = await api.getAuditTransactions(adminAddress, {
+      const headers = await getAuthHeaders();
+      const res = await api.getAuditTransactions(headers, {
         tag: filterTag,
         authorId: filterAuthor,
         dateFrom: filterDateFrom,
@@ -367,9 +369,24 @@ export default function AuditDashboard() {
     );
   }
 
-  const exportUrl = api.getAuditExportUrl(adminAddress, {
-    tag: filterTag, authorId: filterAuthor, dateFrom: filterDateFrom, dateTo: filterDateTo,
-  });
+  // Export CSV now requires auth headers — use a click handler instead of a plain link
+  const handleExportCsv = useCallback(async () => {
+    if (!unlocked) return;
+    try {
+      const headers = await getAuthHeaders();
+      const res = await api.getAuditExport(headers, {
+        tag: filterTag, authorId: filterAuthor, dateFrom: filterDateFrom, dateTo: filterDateTo,
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'audit-transactions.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+  }, [unlocked, getAuthHeaders, filterTag, filterAuthor, filterDateFrom, filterDateTo]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -530,12 +547,11 @@ export default function AuditDashboard() {
           <div className="flex-1" />
 
           {/* Export CSV */}
-          <motion.a
+          <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            href={exportUrl}
-            download
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition-colors"
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer"
             style={{
               background: 'rgba(0,240,255,0.1)',
               color: 'var(--color-primary)',
@@ -544,7 +560,7 @@ export default function AuditDashboard() {
           >
             <Download size={12} />
             {t('audit.export', 'Export CSV')}
-          </motion.a>
+          </motion.button>
         </div>
 
         {/* Table */}

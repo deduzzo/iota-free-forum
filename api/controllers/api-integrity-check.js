@@ -1,9 +1,10 @@
 const db = require('../utility/db');
 const iota = require('../utility/iota');
+const { verifyAdmin } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'Integrity check',
-  description: 'Compare local cache counts vs blockchain event counts to detect missing data.',
+  description: 'Compare local cache counts vs blockchain event counts to detect missing data. Admin only.',
 
   inputs: {},
 
@@ -13,6 +14,12 @@ module.exports = {
 
   fn: async function () {
     try {
+      // Auth: only admin can run integrity checks
+      const admin = await verifyAdmin(this.req);
+      if (!admin) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Admin authentication required.' };
+      }
       // Count local cache entries
       const database = db.getDb();
       const local = {

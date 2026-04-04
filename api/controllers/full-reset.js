@@ -105,6 +105,15 @@ module.exports = {
         DELETE FROM badges_config;
         DELETE FROM user_badges;
         DELETE FROM ratings;
+        DELETE FROM notifications;
+        DELETE FROM direct_messages;
+        DELETE FROM follows;
+        DELETE FROM reactions;
+        DELETE FROM polls;
+        DELETE FROM proposals;
+        DELETE FROM poll_votes;
+        DELETE FROM proposal_votes;
+        DELETE FROM transaction_log;
         INSERT INTO search_index(search_index) VALUES('delete-all');
       `);
       try { database.exec('DROP TABLE IF EXISTS tx_retry_queue'); } catch (e) { /* */ }

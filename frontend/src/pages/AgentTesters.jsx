@@ -114,7 +114,7 @@ function MiniBarChart({ data, maxBars = 30 }) {
 
 export default function AgentTesters() {
   const { t } = useTranslation();
-  const { identity, unlocked } = useIdentity();
+  const { identity, unlocked, getAuthHeaders } = useIdentity();
 
   // ── Config state ────────────────────────────────────────────────────────
   const [agentCount, setAgentCount] = useState(5);
@@ -146,7 +146,8 @@ export default function AgentTesters() {
     let interval;
     const poll = async () => {
       try {
-        const res = await api.getAgentsStatus(identity.address);
+        const headers = await getAuthHeaders();
+        const res = await api.getAgentsStatus(headers);
         if (res.success) {
           setStatus(res);
           setActivityLog(res.activityLog || []);
@@ -193,11 +194,12 @@ export default function AgentTesters() {
   // ── Actions ────────────────────────────────────────────────────────────
 
   const handleStart = useCallback(async () => {
-    if (!identity?.address) return;
+    if (!identity?.address || !unlocked) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.startAgents(identity.address, {
+      const headers = await getAuthHeaders();
+      const res = await api.startAgents(headers, {
         count: agentCount,
         duration,
         frequency,
@@ -215,38 +217,41 @@ export default function AgentTesters() {
     } finally {
       setLoading(false);
     }
-  }, [identity?.address, agentCount, duration, frequency, personality, modules]);
+  }, [identity?.address, unlocked, getAuthHeaders, agentCount, duration, frequency, personality, modules]);
 
   const handleStop = useCallback(async () => {
-    if (!identity?.address) return;
+    if (!identity?.address || !unlocked) return;
     setLoading(true);
     try {
-      const res = await api.stopAgents(identity.address);
+      const headers = await getAuthHeaders();
+      const res = await api.stopAgents(headers);
       if (res.success) setStatus(res.status);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [identity?.address]);
+  }, [identity?.address, unlocked, getAuthHeaders]);
 
   const handlePause = useCallback(async () => {
-    if (!identity?.address) return;
+    if (!identity?.address || !unlocked) return;
     try {
-      const res = await api.pauseAgents(identity.address);
+      const headers = await getAuthHeaders();
+      const res = await api.pauseAgents(headers);
       if (res.success) setStatus(res.status);
     } catch (err) {
       setError(err.message);
     }
-  }, [identity?.address]);
+  }, [identity?.address, unlocked, getAuthHeaders]);
 
   const fetchFeedback = useCallback(async () => {
-    if (!identity?.address) return;
+    if (!identity?.address || !unlocked) return;
     try {
-      const res = await api.getAgentsFeedback(identity.address);
+      const headers = await getAuthHeaders();
+      const res = await api.getAgentsFeedback(headers);
       if (res.success) setFeedback(res.feedback || []);
     } catch { /* ignore */ }
-  }, [identity?.address]);
+  }, [identity?.address, unlocked, getAuthHeaders]);
 
   // Fetch feedback when switching to that tab
   useEffect(() => {

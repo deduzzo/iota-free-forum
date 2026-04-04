@@ -7,21 +7,17 @@
 
 const db = require('../utility/db');
 const { getOrchestrator } = require('../utility/AgentOrchestrator');
+const { verifyAdmin: verifyAdminAuth } = require('../utility/authMiddleware');
 
-// ── Admin verification helper ───────────────────────────────────────────────
+// ── Admin verification helper (now uses Ed25519 signature) ──────────────────
 
-function verifyAdmin(adminAddress, res) {
-  if (!adminAddress) {
-    res.status(400);
-    return { success: false, error: 'adminAddress is required' };
-  }
-  const Users = db.getModel('users');
-  const admin = Users.findOne({ id: adminAddress });
-  if (!admin || admin.role !== 'admin') {
+async function verifyAdminSig(req, res) {
+  const admin = await verifyAdminAuth(req);
+  if (!admin) {
     res.status(403);
-    return { success: false, error: 'Access denied. Admin role required.' };
+    return { success: false, error: 'Access denied. Admin Ed25519 authentication required.' };
   }
-  return null; // OK
+  return null; // OK — admin address available from req.headers['x-auth-address']
 }
 
 module.exports = {
@@ -59,7 +55,7 @@ module.exports = {
     try {
       // POST /api/v1/admin/agents/start
       if (method === 'POST' && url.includes('/start')) {
-        const err = verifyAdmin(inputs.adminAddress, res);
+        const err = await verifyAdminSig(req, res);
         if (err) return err;
 
         const orchestrator = getOrchestrator();
@@ -77,7 +73,7 @@ module.exports = {
           modules: inputs.modules || ['forum', 'payments', 'escrow', 'social', 'edgecases'],
         };
 
-        sails.log.info(`[api-agents] Starting ${config.count} agents (admin: ${inputs.adminAddress})`);
+        sails.log.info(`[api-agents] Starting ${config.count} agents (admin: ${req.headers['x-auth-address']})`);
 
         const initResult = await orchestrator.initialize(config);
         const startResult = await orchestrator.start();
@@ -92,38 +88,37 @@ module.exports = {
 
       // POST /api/v1/admin/agents/stop
       if (method === 'POST' && url.includes('/stop')) {
-        const err = verifyAdmin(inputs.adminAddress, res);
+        const err = await verifyAdminSig(req, res);
         if (err) return err;
 
         const orchestrator = getOrchestrator();
         const status = orchestrator.stop();
 
-        sails.log.info(`[api-agents] Agents stopped (admin: ${inputs.adminAddress})`);
+        sails.log.info(`[api-agents] Agents stopped (admin: ${req.headers['x-auth-address']})`);
         return { success: true, status };
       }
 
       // POST /api/v1/admin/agents/pause
       if (method === 'POST' && url.includes('/pause')) {
-        const err = verifyAdmin(inputs.adminAddress, res);
+        const err = await verifyAdminSig(req, res);
         if (err) return err;
 
         const orchestrator = getOrchestrator();
 
         if (orchestrator.paused) {
           orchestrator.resume();
-          sails.log.info(`[api-agents] Agents resumed (admin: ${inputs.adminAddress})`);
+          sails.log.info(`[api-agents] Agents resumed (admin: ${req.headers['x-auth-address']})`);
           return { success: true, action: 'resumed', status: orchestrator.getStatus() };
         } else {
           orchestrator.pause();
-          sails.log.info(`[api-agents] Agents paused (admin: ${inputs.adminAddress})`);
+          sails.log.info(`[api-agents] Agents paused (admin: ${req.headers['x-auth-address']})`);
           return { success: true, action: 'paused', status: orchestrator.getStatus() };
         }
       }
 
       // GET /api/v1/admin/agents/status
       if (method === 'GET' && url.includes('/status')) {
-        const adminAddr = inputs.adminAddress || req.query?.adminAddress;
-        const err = verifyAdmin(adminAddr, res);
+        const err = await verifyAdminSig(req, res);
         if (err) return err;
 
         const orchestrator = getOrchestrator();
@@ -136,8 +131,7 @@ module.exports = {
 
       // GET /api/v1/admin/agents/feedback
       if (method === 'GET' && url.includes('/feedback')) {
-        const adminAddr = inputs.adminAddress || req.query?.adminAddress;
-        const err = verifyAdmin(adminAddr, res);
+        const err = await verifyAdminSig(req, res);
         if (err) return err;
 
         const orchestrator = getOrchestrator();

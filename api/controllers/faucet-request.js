@@ -58,7 +58,9 @@ module.exports = {
       } catch (e) { /* wallets table may be empty */ }
 
       // Rate limit 3: per-IP (prevent single attacker generating many addresses)
-      const clientIp = this.req.ip || this.req.headers['x-forwarded-for'] || 'unknown';
+      // Use only req.ip (trusted by Express/Sails trust proxy setting)
+      // Do NOT use x-forwarded-for directly — it can be spoofed by clients
+      const clientIp = this.req.ip || 'unknown';
       try {
         const recentFromIp = database.prepare(
           'SELECT COUNT(*) as cnt FROM wallets WHERE funded = 1 AND fundedAt > ? AND userId = ?'

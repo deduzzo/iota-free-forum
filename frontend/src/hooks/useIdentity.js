@@ -473,6 +473,29 @@ export function useIdentity() {
     }
   }, [identity?.address]);
 
+  // ── Auth headers for private API endpoints ──────────────────────────────
+
+  /**
+   * Generate authentication headers for private API endpoints.
+   * Returns { 'X-Auth-Address', 'X-Auth-Signature', 'X-Auth-Timestamp' }
+   * The signature signs: JSON.stringify({ action: 'auth', address, timestamp })
+   */
+  const getAuthHeaders = useCallback(async () => {
+    if (!identity?.address || !keypairRef.current) {
+      throw new Error('Identity not unlocked — cannot generate auth headers');
+    }
+    const address = identity.address;
+    const timestamp = Date.now();
+    const message = JSON.stringify({ action: 'auth', address, timestamp });
+    const msgBytes = new TextEncoder().encode(message);
+    const { signature } = await keypairRef.current.signPersonalMessage(msgBytes);
+    return {
+      'X-Auth-Address': address,
+      'X-Auth-Signature': signature,
+      'X-Auth-Timestamp': String(timestamp),
+    };
+  }, [identity?.address]);
+
   // Build a backward-compatible identity object that includes userId alias
   const compatIdentity = identity ? {
     ...identity,
@@ -500,6 +523,9 @@ export function useIdentity() {
     changePassword,
     clearIdentity,
     getBalance,
+
+    // Auth headers for private API endpoints
+    getAuthHeaders,      // Returns { 'X-Auth-Address', 'X-Auth-Signature', 'X-Auth-Timestamp' }
 
     // Actions — legacy compat (HTTP-based, for existing components)
     signAndSend,         // Legacy: signAndSend(url, method, data)

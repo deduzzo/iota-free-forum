@@ -748,12 +748,23 @@ module forum::forum {
 
         table::add(&mut content.buyers, sender, true);
 
+        // Split exact price from payment, return overpayment to sender
         let mut payment_balance = coin::into_balance(payment);
+        let mut exact_balance = balance::split(&mut payment_balance, price);
+
+        // Return overpayment to sender (same pattern as subscribe)
+        if (balance::value(&payment_balance) > 0) {
+            transfer::public_transfer(coin::from_balance(payment_balance, ctx), sender);
+        } else {
+            balance::destroy_zero(payment_balance);
+        };
+
+        // Deduct marketplace fee from exact price, rest goes to author
         let fee_amount = price / MARKETPLACE_FEE_DIVISOR;
-        let fee_balance = balance::split(&mut payment_balance, fee_amount);
+        let fee_balance = balance::split(&mut exact_balance, fee_amount);
         balance::join(&mut treasury.balance, fee_balance);
 
-        let author_coin = coin::from_balance(payment_balance, ctx);
+        let author_coin = coin::from_balance(exact_balance, ctx);
         transfer::public_transfer(author_coin, author);
 
         let now = clock.timestamp_ms();

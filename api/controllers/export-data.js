@@ -1,8 +1,9 @@
 const db = require('../utility/db');
+const { verifyAdmin } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'Export data',
-  description: 'Dump all database tables as JSON.',
+  description: 'Dump all database tables as JSON. Admin only.',
 
   inputs: {},
 
@@ -12,6 +13,12 @@ module.exports = {
 
   fn: async function () {
     try {
+      // Auth: only admin can export all data
+      const admin = await verifyAdmin(this.req);
+      if (!admin) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Admin authentication required.' };
+      }
       const Users = db.getModel('users');
       const Categories = db.getModel('categories');
       const Threads = db.getModel('threads');

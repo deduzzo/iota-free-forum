@@ -4,6 +4,8 @@ try { backendPort = require('./private_iota_conf').PORT || 1337; } catch (e) {}
 module.exports.custom = {
   // Porte: configurate in config/private_iota_conf.js (PORT, FRONTEND_PORT)
   baseUrl: `http://localhost:${backendPort}`,
+  // Set FORUM_URL env var in production (e.g. "https://iotapolis.io")
+  forumUrl: process.env.FORUM_URL || null,
 
   forumName: 'IotaPolis',
   postsPerPage: 20,

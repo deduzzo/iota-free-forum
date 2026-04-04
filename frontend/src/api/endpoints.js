@@ -1,8 +1,27 @@
 const API_BASE = '/api/v1';
 
 /**
+ * Helper for authenticated fetch requests.
+ * @param {string} url - Full API URL
+ * @param {object} authHeaders - Headers from useIdentity().getAuthHeaders()
+ * @param {object} [options] - Additional fetch options
+ */
+function authFetch(url, authHeaders, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...authHeaders,
+    },
+  }).then((r) => r.json());
+}
+
+/**
  * Read-only API endpoints (no signature required).
  * Write operations now go directly to the blockchain via useIdentity().signAndSend().
+ *
+ * Private endpoints (notifications, DMs, admin) require authHeaders parameter
+ * from useIdentity().getAuthHeaders().
  */
 export const api = {
   // Categories
@@ -56,8 +75,8 @@ export const api = {
 
   // ── New endpoints (payments / reputation) ─────────────────────────────────
 
-  // Deploy contract — first-time setup
-  deployContract: () =>
+  // Deploy contract — first-time setup (unauthenticated, only works on empty DB)
+  deployContractFirstSetup: () =>
     fetch(`${API_BASE}/deploy-contract`, { method: 'POST' }).then((r) => r.json()),
 
   // Faucet — request gas tokens for a new address
@@ -97,61 +116,67 @@ export const api = {
   getPostTips: (postId) =>
     fetch(`${API_BASE}/tips/${postId}`).then((r) => r.json()),
 
-  // ── Notifications ─────────────────────────────────────────────────────────
-  getNotifications: (userId, page = 1, type = null) => {
+  // ── Notifications (require authHeaders from useIdentity().getAuthHeaders()) ──
+  getNotifications: (userId, authHeaders, page = 1, type = null) => {
     const params = new URLSearchParams({ page });
     if (type) params.set('type', type);
-    return fetch(`${API_BASE}/notifications/${userId}?${params}`).then((r) => r.json());
+    return authFetch(`${API_BASE}/notifications/${userId}?${params}`, authHeaders);
   },
 
-  getUnreadCount: (userId) =>
-    fetch(`${API_BASE}/notifications/${userId}/unread-count`).then((r) => r.json()),
+  getUnreadCount: (userId, authHeaders) =>
+    authFetch(`${API_BASE}/notifications/${userId}/unread-count`, authHeaders),
 
-  markNotificationRead: (id) =>
-    fetch(`${API_BASE}/notifications/${id}/read`, { method: 'PUT' }).then((r) => r.json()),
+  markNotificationRead: (id, authHeaders) =>
+    authFetch(`${API_BASE}/notifications/${id}/read`, authHeaders, { method: 'PUT' }),
 
-  markAllNotificationsRead: (userId) =>
-    fetch(`${API_BASE}/notifications/${userId}/read-all`, { method: 'PUT' }).then((r) => r.json()),
+  markAllNotificationsRead: (userId, authHeaders) =>
+    authFetch(`${API_BASE}/notifications/${userId}/read-all`, authHeaders, { method: 'PUT' }),
 
   // ── Reactions ─────────────────────────────────────────────────────────
   getReactions: (postId) =>
     fetch(`${API_BASE}/reactions/${postId}`).then((r) => r.json()),
 
-  // ── Direct Messages (E2E encrypted) ─────────────────────────────────
-  getDMConversations: (userId) =>
-    fetch(`${API_BASE}/dm/conversations/${userId}`).then((r) => r.json()),
+  // ── Direct Messages (E2E encrypted, require authHeaders) ────────────
+  getDMConversations: (userId, authHeaders) =>
+    authFetch(`${API_BASE}/dm/conversations/${userId}`, authHeaders),
 
-  getDMMessages: (userId, otherUserId, page = 1) =>
-    fetch(`${API_BASE}/dm/${userId}/${otherUserId}?page=${page}`).then((r) => r.json()),
+  getDMMessages: (userId, otherUserId, authHeaders, page = 1) =>
+    authFetch(`${API_BASE}/dm/${userId}/${otherUserId}?page=${page}`, authHeaders),
 
-  getDMUnreadCount: (userId) =>
-    fetch(`${API_BASE}/dm/${userId}/unread-count`).then((r) => r.json()),
+  getDMUnreadCount: (userId, authHeaders) =>
+    authFetch(`${API_BASE}/dm/${userId}/unread-count`, authHeaders),
 
-  // ── Audit Dashboard (admin) ─────────────────────────────────────────
-  getAuditStats: (adminAddress) =>
-    fetch(`${API_BASE}/admin/audit/stats?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+  // ── Audit Dashboard (admin, require authHeaders) ────────────────────
+  getAuditStats: (authHeaders) =>
+    authFetch(`${API_BASE}/admin/audit/stats`, authHeaders),
 
-  getAuditTransactions: (adminAddress, filters = {}) => {
-    const params = new URLSearchParams({ adminAddress });
+  getAuditTransactions: (authHeaders, filters = {}) => {
+    const params = new URLSearchParams();
     if (filters.tag) params.set('tag', filters.tag);
     if (filters.authorId) params.set('authorId', filters.authorId);
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.set('dateTo', filters.dateTo);
     if (filters.page) params.set('page', filters.page);
     if (filters.limit) params.set('limit', filters.limit);
-    return fetch(`${API_BASE}/admin/audit/transactions?${params}`).then((r) => r.json());
+    const qs = params.toString();
+    return authFetch(`${API_BASE}/admin/audit/transactions${qs ? '?' + qs : ''}`, authHeaders);
   },
 
-  getAuditTransaction: (adminAddress, id) =>
-    fetch(`${API_BASE}/admin/audit/transactions/${id}?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+  getAuditTransaction: (authHeaders, id) =>
+    authFetch(`${API_BASE}/admin/audit/transactions/${id}`, authHeaders),
 
-  getAuditExportUrl: (adminAddress, filters = {}) => {
-    const params = new URLSearchParams({ adminAddress });
+  // NOTE: audit export URL now requires auth headers (cannot be a simple link).
+  // Use getAuditExport() to fetch as blob instead.
+  getAuditExport: (authHeaders, filters = {}) => {
+    const params = new URLSearchParams();
     if (filters.tag) params.set('tag', filters.tag);
     if (filters.authorId) params.set('authorId', filters.authorId);
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.set('dateTo', filters.dateTo);
-    return `${API_BASE}/admin/audit/export?${params}`;
+    const qs = params.toString();
+    return fetch(`${API_BASE}/admin/audit/export${qs ? '?' + qs : ''}`, {
+      headers: { ...authHeaders },
+    });
   },
 
   // ── Social Graph (follows) ──���────────────────────────��─────────────
@@ -181,31 +206,48 @@ export const api = {
   getProposal: (id) =>
     fetch(`${API_BASE}/proposals/${id}`).then((r) => r.json()),
 
-  // ── Agent Beta Testers (admin) ───────────────────────────────────────
-  startAgents: (adminAddress, config) =>
-    fetch(`${API_BASE}/admin/agents/start`, {
+  // ── Agent Beta Testers (admin, require authHeaders) ──────────────────
+  startAgents: (authHeaders, config = {}) =>
+    authFetch(`${API_BASE}/admin/agents/start`, authHeaders, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminAddress, ...config }),
-    }).then((r) => r.json()),
+      body: JSON.stringify(config),
+    }),
 
-  stopAgents: (adminAddress) =>
-    fetch(`${API_BASE}/admin/agents/stop`, {
+  stopAgents: (authHeaders) =>
+    authFetch(`${API_BASE}/admin/agents/stop`, authHeaders, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminAddress }),
-    }).then((r) => r.json()),
+      body: JSON.stringify({}),
+    }),
 
-  pauseAgents: (adminAddress) =>
-    fetch(`${API_BASE}/admin/agents/pause`, {
+  pauseAgents: (authHeaders) =>
+    authFetch(`${API_BASE}/admin/agents/pause`, authHeaders, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminAddress }),
-    }).then((r) => r.json()),
+      body: JSON.stringify({}),
+    }),
 
-  getAgentsStatus: (adminAddress) =>
-    fetch(`${API_BASE}/admin/agents/status?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+  getAgentsStatus: (authHeaders) =>
+    authFetch(`${API_BASE}/admin/agents/status`, authHeaders),
 
-  getAgentsFeedback: (adminAddress) =>
-    fetch(`${API_BASE}/admin/agents/feedback?adminAddress=${encodeURIComponent(adminAddress)}`).then((r) => r.json()),
+  getAgentsFeedback: (authHeaders) =>
+    authFetch(`${API_BASE}/admin/agents/feedback`, authHeaders),
+
+  // ── Admin utility (require authHeaders) ─────────────────────────────
+  exportData: (authHeaders) =>
+    authFetch(`${API_BASE}/export-data`, authHeaders),
+
+  integrityCheck: (authHeaders) =>
+    authFetch(`${API_BASE}/integrity-check`, authHeaders),
+
+  deployContract: (authHeaders) =>
+    authFetch(`${API_BASE}/deploy-contract`, authHeaders, { method: 'POST' }),
+
+  syncConnect: (authHeaders, connectionString) =>
+    authFetch(`${API_BASE}/sync-connect`, authHeaders, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectionString }),
+    }),
 };

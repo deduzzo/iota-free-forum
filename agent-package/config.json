@@ -1,0 +1,7 @@
+{
+  "forum_url": "http://localhost:5173",
+  "agent_name": "BetaTester",
+  "test_phases": ["basics", "social", "advanced", "edge_cases"],
+  "password": "AgentTest123!",
+  "verbose": true
+}

@@ -23,7 +23,7 @@ function randomText(minLen = 100, maxLen = 800) {
 }
 
 export default function LoadTestPanel() {
-  const { identity, postEvent } = useIdentity();
+  const { identity, postEvent, getAuthHeaders, unlocked } = useIdentity();
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -276,7 +276,8 @@ export default function LoadTestPanel() {
     // Integrity check
     try {
       addLog('Eseguendo integrity check...');
-      const res = await fetch('/api/v1/integrity-check');
+      const authHdrs = unlocked ? await getAuthHeaders() : {};
+      const res = await fetch('/api/v1/integrity-check', { headers: authHdrs });
       const data = await res.json();
       addLog(`Integrity: ${data.synced ? 'SYNCED' : 'MISMATCH'}`, data.synced ? 'success' : 'error');
       addLog(`Local: users=${data.local?.users} threads=${data.local?.threads} posts=${data.local?.posts} votes=${data.local?.votes}`);

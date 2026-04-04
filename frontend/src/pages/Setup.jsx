@@ -83,6 +83,9 @@ export default function Setup() {
   const [connectNetwork, setConnectNetwork] = useState('testnet');
   const [connectStatus, setConnectStatus] = useState(null);
   const [forumName, setForumName] = useState('');
+  const [deploying, setDeploying] = useState(false);
+  const [deployError, setDeployError] = useState(null);
+  const needsDeploy = forumInfo && !forumInfo.packageId;
 
   // Fetch current forum info on mount
   useEffect(() => {
@@ -250,102 +253,221 @@ export default function Setup() {
               ← Torna indietro
             </button>
 
-            <div className="glass-card p-6 rounded-xl" style={{ borderRadius: 'var(--border-radius)' }}>
-              <div className="flex items-center gap-3 mb-4">
-                <CheckCircle size={24} style={{ color: 'var(--color-success)' }} />
-                <h2 className="text-xl font-bold">Il tuo forum e pronto!</h2>
+            {/* Step indicators */}
+            <div className="flex items-center justify-center gap-0 mb-6">
+              <div className="flex flex-col items-center">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{
+                    backgroundColor: needsDeploy ? 'var(--color-primary)' : 'var(--color-success)',
+                    color: 'var(--color-background)',
+                    boxShadow: needsDeploy ? '0 0 15px rgba(0,240,255,0.4)' : '0 0 15px rgba(0,255,136,0.4)',
+                  }}
+                >
+                  {needsDeploy ? '1' : <CheckCircle size={18} />}
+                </div>
+                <span className="text-xs mt-1" style={{ color: needsDeploy ? 'var(--color-primary)' : 'var(--color-success)' }}>
+                  Deploy
+                </span>
               </div>
+              <div
+                className="w-16 h-0.5 mb-5"
+                style={{
+                  backgroundColor: needsDeploy ? 'var(--color-border)' : 'var(--color-success)',
+                  transition: 'background-color 0.5s ease',
+                }}
+              />
+              <div className="flex flex-col items-center">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{
+                    backgroundColor: needsDeploy ? 'var(--color-surface)' : 'var(--color-primary)',
+                    color: needsDeploy ? 'var(--color-text-muted)' : 'var(--color-background)',
+                    border: needsDeploy ? '2px solid var(--color-border)' : 'none',
+                    boxShadow: !needsDeploy ? '0 0 15px rgba(0,240,255,0.4)' : 'none',
+                  }}
+                >
+                  2
+                </div>
+                <span className="text-xs mt-1" style={{ color: needsDeploy ? 'var(--color-text-muted)' : 'var(--color-primary)' }}>
+                  Pronto
+                </span>
+              </div>
+            </div>
 
-              <p className="mb-6" style={{ color: 'var(--color-text-muted)' }}>
-                Il wallet IOTA e stato creato automaticamente. Condividi queste informazioni con chi vuole collegarsi al tuo forum.
-              </p>
-
-              {/* Connection info */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                    Indirizzo wallet (pubblico)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code
-                      className="flex-1 p-3 rounded-lg text-sm font-mono break-all"
-                      style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-primary)' }}
-                    >
-                      {forumInfo?.address || 'Loading...'}
-                    </code>
-                    {forumInfo?.address && <CopyButton text={forumInfo.address} />}
-                  </div>
+            {/* STEP 1: Deploy contract (if needed) */}
+            {needsDeploy && (
+              <div className="glass-card p-6 rounded-xl" style={{ borderRadius: 'var(--border-radius)' }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <Server size={24} style={{ color: 'var(--color-warning)' }} />
+                  <h2 className="text-xl font-bold">Step 1: Deploya lo Smart Contract</h2>
                 </div>
 
-                <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                    Network
-                  </label>
-                  <div
-                    className="p-3 rounded-lg text-sm font-mono"
-                    style={{ backgroundColor: 'var(--color-background)' }}
-                  >
-                    {forumInfo?.network || 'testnet'}
+                <p className="mb-4" style={{ color: 'var(--color-text-muted)' }}>
+                  Il wallet server e stato creato. Ora devi deployare lo smart contract Move sulla blockchain IOTA.
+                  Questo crea i 6 oggetti condivisi che gestiscono il forum.
+                </p>
+
+                <div className="mb-4 p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--color-background)' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Key size={14} style={{ color: 'var(--color-primary)' }} />
+                    <span style={{ color: 'var(--color-text-muted)' }}>Wallet server:</span>
                   </div>
+                  <code className="font-mono text-xs break-all" style={{ color: 'var(--color-primary)' }}>
+                    {forumInfo?.address || '...'}
+                  </code>
                 </div>
 
-                <div>
-                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                    Stringa di connessione (da condividere)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code
-                      className="flex-1 p-3 rounded-lg text-sm font-mono"
-                      style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-success)' }}
-                    >
-                      {forumInfo?.connectionString || 'Loading...'}
-                    </code>
-                    {forumInfo?.connectionString && <CopyButton text={forumInfo.connectionString} />}
+                {deployError && (
+                  <div className="mb-4 p-3 rounded-lg text-sm flex items-center gap-2"
+                    style={{ backgroundColor: 'rgba(255,68,68,0.1)', color: 'var(--color-danger)' }}>
+                    <AlertCircle size={16} />
+                    {deployError}
                   </div>
-                </div>
-
-                {forumInfo?.explorerUrl && forumInfo?.address && (
-                  <a
-                    href={`${forumInfo.explorerUrl}/address/${forumInfo.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm"
-                    style={{ color: 'var(--color-primary)' }}
-                  >
-                    <ExternalLink size={14} />
-                    Vedi su Explorer
-                  </a>
                 )}
+
+                <button
+                  onClick={async () => {
+                    setDeploying(true);
+                    setDeployError(null);
+                    try {
+                      const res = await fetch('/api/v1/deploy-contract', { method: 'POST' });
+                      const data = await res.json();
+                      if (data.success) {
+                        // Refresh forum info
+                        const infoRes = await fetch('/api/v1/forum-info');
+                        const info = await infoRes.json();
+                        setForumInfo(info);
+                      } else {
+                        setDeployError(data.error || 'Deploy fallito. Verifica che il wallet abbia fondi.');
+                      }
+                    } catch (err) {
+                      setDeployError('Errore: ' + err.message);
+                    }
+                    setDeploying(false);
+                  }}
+                  disabled={deploying}
+                  className="w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
+                  style={{
+                    backgroundColor: deploying ? 'var(--color-surface)' : 'var(--color-warning)',
+                    color: deploying ? 'var(--color-text-muted)' : 'var(--color-background)',
+                    borderRadius: 'var(--border-radius)',
+                  }}
+                >
+                  {deploying ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Deploy in corso... (30-60 secondi)
+                    </>
+                  ) : (
+                    <>
+                      <Server size={18} />
+                      Deploya Smart Contract
+                    </>
+                  )}
+                </button>
               </div>
-            </div>
+            )}
 
-            {/* Warning */}
-            <div
-              className="p-4 rounded-xl border text-sm"
-              style={{
-                borderColor: 'var(--color-primary)',
-                backgroundColor: 'rgba(0,240,255,0.05)',
-                color: 'var(--color-text-muted)',
-                borderRadius: 'var(--border-radius)',
-              }}
-            >
-              <strong style={{ color: 'var(--color-primary)' }}>Nota:</strong> Il wallet server in{' '}
-              <code className="text-xs" style={{ color: 'var(--color-text)' }}>config/private_iota_conf.js</code>{' '}
-              serve solo per il faucet (invio gas ai nuovi utenti). Non controlla la pubblicazione — ogni utente firma con il proprio wallet.
-            </div>
+            {/* STEP 2: Forum ready (shown after deploy) */}
+            {!needsDeploy && (
+              <>
+                <div className="glass-card p-6 rounded-xl" style={{ borderRadius: 'var(--border-radius)' }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <CheckCircle size={24} style={{ color: 'var(--color-success)' }} />
+                    <h2 className="text-xl font-bold">Il tuo forum e pronto!</h2>
+                  </div>
 
-            <button
-              onClick={() => { localStorage.setItem('forum_setup_done', 'create'); window.location.href = '/identity'; }}
-              className="w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
-              style={{
-                backgroundColor: 'var(--color-primary)',
-                color: 'var(--color-background)',
-                borderRadius: 'var(--border-radius)',
-              }}
-            >
-              Vai al forum
-              <ArrowRight size={18} />
-            </button>
+                  <p className="mb-6" style={{ color: 'var(--color-text-muted)' }}>
+                    Smart contract deployato e wallet configurato. Condividi la stringa di connessione con chi vuole collegarsi.
+                  </p>
+
+                  {/* Connection info */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                        Indirizzo wallet (pubblico)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <code
+                          className="flex-1 p-3 rounded-lg text-sm font-mono break-all"
+                          style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-primary)' }}
+                        >
+                          {forumInfo?.address}
+                        </code>
+                        <CopyButton text={forumInfo?.address} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                        Network
+                      </label>
+                      <div
+                        className="p-3 rounded-lg text-sm font-mono"
+                        style={{ backgroundColor: 'var(--color-background)' }}
+                      >
+                        {forumInfo?.network || 'testnet'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                        Stringa di connessione (da condividere)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <code
+                          className="flex-1 p-3 rounded-lg text-sm font-mono break-all"
+                          style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-success)' }}
+                        >
+                          {forumInfo?.connectionString}
+                        </code>
+                        <CopyButton text={forumInfo?.connectionString} />
+                      </div>
+                    </div>
+
+                    {forumInfo?.explorerUrl && forumInfo?.address && (
+                      <a
+                        href={`${forumInfo.explorerUrl}/address/${forumInfo.address}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm"
+                        style={{ color: 'var(--color-primary)' }}
+                      >
+                        <ExternalLink size={14} />
+                        Vedi su Explorer
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Warning */}
+                <div
+                  className="p-4 rounded-xl border text-sm"
+                  style={{
+                    borderColor: 'var(--color-primary)',
+                    backgroundColor: 'rgba(0,240,255,0.05)',
+                    color: 'var(--color-text-muted)',
+                    borderRadius: 'var(--border-radius)',
+                  }}
+                >
+                  <strong style={{ color: 'var(--color-primary)' }}>Nota:</strong> Il wallet server serve solo per il faucet (invio gas ai nuovi utenti). Ogni utente firma con il proprio wallet.
+                </div>
+
+                <button
+                  onClick={() => { localStorage.setItem('forum_setup_done', 'create'); window.location.href = '/identity'; }}
+                  className="w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
+                  style={{
+                    backgroundColor: 'var(--color-primary)',
+                    color: 'var(--color-background)',
+                    borderRadius: 'var(--border-radius)',
+                  }}
+                >
+                  Vai al forum
+                  <ArrowRight size={18} />
+                </button>
+              </>
+            )}
           </motion.div>
         )}
 

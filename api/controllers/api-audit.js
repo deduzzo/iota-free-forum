@@ -7,18 +7,7 @@
 
 const db = require('../utility/db');
 const cache = require('../utility/cache');
-
-/**
- * Verify that the requesting user is an admin.
- * @param {string} adminAddress - IOTA address to check
- * @returns {boolean}
- */
-function isAdmin(adminAddress) {
-  if (!adminAddress) return false;
-  const Users = db.getModel('users');
-  const user = Users.findOne({ id: adminAddress });
-  return user && user.role === 'admin';
-}
+const { verifyAdmin } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'API Audit',
@@ -36,11 +25,11 @@ module.exports = {
     const res = this.res;
     const url = req.url;
 
-    // Extract adminAddress from query params
-    const adminAddress = req.query.adminAddress || req.headers['x-admin-address'];
-    if (!isAdmin(adminAddress)) {
+    // Verify admin via Ed25519 signature headers
+    const admin = await verifyAdmin(req);
+    if (!admin) {
       res.status(403);
-      return { success: false, error: 'Access denied. Admin only.' };
+      return { success: false, error: 'Access denied. Admin Ed25519 authentication required.' };
     }
 
     try {

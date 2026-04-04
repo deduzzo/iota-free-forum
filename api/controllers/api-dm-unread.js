@@ -5,6 +5,7 @@
  */
 
 const db = require('../utility/db');
+const { verifyUser } = require('../utility/authMiddleware');
 
 module.exports = {
   friendlyName: 'API DM Unread Count',
@@ -22,6 +23,13 @@ module.exports = {
       if (!userId) {
         this.res.status(400);
         return { success: false, error: 'userId is required' };
+      }
+
+      // Auth: verify caller owns this userId
+      const caller = await verifyUser(this.req);
+      if (!caller || caller !== userId) {
+        this.res.status(403);
+        return { success: false, error: 'Access denied. Authentication required.' };
       }
 
       const database = db.getDb();

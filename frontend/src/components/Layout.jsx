@@ -119,14 +119,17 @@ function MobileBottomNav({ navigate }) {
 
 function SyncInfoButton({ isSynced, syncState, syncStatus }) {
   const { t } = useTranslation();
+  const { getAuthHeaders, unlocked } = useIdentity();
   const [showPanel, setShowPanel] = useState(false);
   const [integrity, setIntegrity] = useState(null);
   const [loadingIntegrity, setLoadingIntegrity] = useState(false);
 
   async function fetchIntegrity() {
+    if (!unlocked) return;
     setLoadingIntegrity(true);
     try {
-      const res = await fetch('/api/v1/integrity-check');
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/v1/integrity-check', { headers });
       const data = await res.json();
       setIntegrity(data);
     } catch { setIntegrity(null); }

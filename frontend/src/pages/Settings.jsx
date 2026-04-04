@@ -53,7 +53,7 @@ function ActionCard({ icon: Icon, title, description, buttonText, buttonColor, o
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
-  const { identity, unlocked, unlockIdentity, clearIdentity, exportIdentity } = useIdentity();
+  const { identity, unlocked, unlockIdentity, clearIdentity, exportIdentity, getAuthHeaders } = useIdentity();
   const { addToast } = useToast();
   const [loading, setLoading] = useState({});
   const [confirmReset, setConfirmReset] = useState(null);
@@ -186,7 +186,8 @@ export default function Settings() {
     setLoading(l => ({ ...l, export: true }));
     addLog('Exporting server data...');
     try {
-      const res = await fetch('/api/v1/export-data');
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/v1/export-data', { headers });
       const data = await res.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

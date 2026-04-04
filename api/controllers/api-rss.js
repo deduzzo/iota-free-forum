@@ -85,7 +85,8 @@ module.exports = {
 
   fn: async function (req, res) {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      // Use configured URL to prevent host header injection
+      const baseUrl = sails.config.custom.forumUrl || sails.config.custom.baseUrl || `${req.protocol}://${req.get('host')}`;
       const categoryId = req.params.categoryId || null;
 
       let threads;

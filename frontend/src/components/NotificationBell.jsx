@@ -37,7 +37,7 @@ function formatTimeAgo(dateStr) {
 
 export default function NotificationBell() {
   const { t } = useTranslation();
-  const { identity } = useIdentity();
+  const { identity, getAuthHeaders, unlocked } = useIdentity();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -49,23 +49,25 @@ export default function NotificationBell() {
 
   // Fetch unread count
   const fetchUnread = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !unlocked) return;
     try {
-      const res = await api.getUnreadCount(userId);
+      const headers = await getAuthHeaders();
+      const res = await api.getUnreadCount(userId, headers);
       if (res.success) setUnreadCount(res.unreadCount);
     } catch { /* ignore */ }
-  }, [userId]);
+  }, [userId, unlocked, getAuthHeaders]);
 
   // Fetch notifications when dropdown opens
   const fetchNotifications = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !unlocked) return;
     setLoading(true);
     try {
-      const res = await api.getNotifications(userId, 1);
+      const headers = await getAuthHeaders();
+      const res = await api.getNotifications(userId, headers, 1);
       if (res.success) setNotifications(res.notifications || []);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [userId]);
+  }, [userId, unlocked, getAuthHeaders]);
 
   // Poll unread count
   useEffect(() => {
@@ -104,7 +106,8 @@ export default function NotificationBell() {
 
   async function handleMarkRead(notifId) {
     try {
-      await api.markNotificationRead(notifId);
+      const headers = await getAuthHeaders();
+      await api.markNotificationRead(notifId, headers);
       setNotifications((prev) => prev.map((n) => (n.id === notifId ? { ...n, read: 1 } : n)));
       setUnreadCount((c) => Math.max(0, c - 1));
     } catch { /* ignore */ }
@@ -113,7 +116,8 @@ export default function NotificationBell() {
   async function handleMarkAllRead() {
     if (!userId) return;
     try {
-      await api.markAllNotificationsRead(userId);
+      const headers = await getAuthHeaders();
+      await api.markAllNotificationsRead(userId, headers);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
       setUnreadCount(0);
     } catch { /* ignore */ }
